@@ -7,8 +7,79 @@ import os
 from pathlib import Path
 from materials import make_materials
 from geometry import create_core
-from tallies import create_all_tallies
+from tallies import create_all_tallies, calc_norm_factor
 from inputs import inputs, get_derived_dimensions
+
+
+def print_simulation_summary(sim_dir):
+    """Print summary of simulation results including tritium production.
+
+    Parameters
+    ----------
+    sim_dir : Path
+        Directory containing the statepoint files
+    """
+    print("\n" + "="*70)
+    print("SIMULATION SUMMARY")
+    print("="*70)
+
+    # Get power and breeder material from inputs
+    power_mw = inputs['core_power']
+    breeder_material = inputs['breeder_material']
+
+    print(f"\nReactor Configuration:")
+    print(f"  Power: {power_mw} MW")
+    print(f"  Breeder Material: {breeder_material}")
+
+    # Find the latest statepoint file
+    statepoint_files = list(sim_dir.glob('statepoint.*.h5'))
+    if not statepoint_files:
+        print("\n  Warning: No statepoint files found. Cannot calculate tritium production.")
+        print("="*70)
+        return
+
+    # Get the last statepoint (highest batch number)
+    latest_sp_file = max(statepoint_files, key=lambda f: int(f.stem.split('.')[-1]))
+
+    try:
+        # Load statepoint
+        sp = openmc.StatePoint(str(latest_sp_file))
+
+        # Calculate normalization factor
+        norm_factor = calc_norm_factor(power_mw, sp)
+
+        # Get tritium breeding tally
+        tbr_tally = sp.get_tally(name='tritium_breeding_ratio')
+        tritium_per_source = tbr_tally.mean[0, 0, 0]  # T atoms/source neutron
+        tritium_per_source_std = tbr_tally.std_dev[0, 0, 0]
+
+        # Calculate absolute tritium production rate
+        t_production = tritium_per_source * norm_factor  # T atoms/s
+        t_production_std = tritium_per_source_std * norm_factor
+
+        # Convert to grams (tritium-3 has atomic mass of 3.0 g/mol)
+        atoms_to_grams = 3.0 / 6.022e23  # g/atom
+
+        # Calculate rates
+        g_per_s = t_production * atoms_to_grams
+        g_per_year = g_per_s * 86400 * 365.25
+
+        # Calculate uncertainties
+        g_per_s_std = t_production_std * atoms_to_grams
+        g_per_year_std = g_per_s_std * 86400 * 365.25
+
+        print(f"\nTritium Production:")
+        print(f"  Per Second: {g_per_s:.6e} ± {g_per_s_std:.6e} g/s")
+        print(f"  Per Year:   {g_per_year:.6e} ± {g_per_year_std:.6e} g/year")
+
+        # Also print TBR for reference
+        print(f"\nTritium Breeding Ratio (TBR):")
+        print(f"  {tritium_per_source:.6f} ± {tritium_per_source_std:.6f} T atoms/source neutron")
+
+    except Exception as e:
+        print(f"\n  Warning: Could not calculate tritium production: {e}")
+
+    print("="*70)
 
 
 def run_simulation():
@@ -79,6 +150,9 @@ def run_simulation():
     print("\n" + "="*70)
     print("Simulation Complete!")
     print("="*70)
+
+    # Print summary of results
+    print_simulation_summary(sim_dir)
 
 
 if __name__ == '__main__':

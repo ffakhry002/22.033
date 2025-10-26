@@ -17,7 +17,12 @@ MATERIAL_COLORS = {
     'ap_1000_coolant_outer': 'deepskyblue',
     'rpv_steel': 'darkgray',
     'natural_lithium': 'yellow',
-    'enriched_lithium': 'gold'
+    'enriched_lithium': 'gold',
+    'natural_flibe': 'lightgreen',
+    'enriched_flibe': 'limegreen',
+    'natural_pbli': 'silver',
+    'enriched_pbli': 'lightgray',
+    'double_enriched_pbli': 'slategray'
 }
 
 def BEAVRS_pin(mat_dict):
@@ -144,9 +149,18 @@ def create_core(mat_dict):
     """Create the full core geometry with reflectors and containment."""
     derived = get_derived_dimensions()
 
-    # Select lithium material
-    lithium_mat = (mat_dict['enriched_lithium'] if inputs['lithium_type'] == 'enriched'
-                   else mat_dict['natural_lithium'])
+    # Select breeder material based on configuration
+    valid_materials = [
+        'natural_lithium', 'enriched_lithium',
+        'natural_flibe', 'enriched_flibe',
+        'natural_pbli', 'enriched_pbli', 'double_enriched_pbli'
+    ]
+
+    breeder_material = inputs['breeder_material']
+    if breeder_material not in valid_materials:
+        raise ValueError(f"Invalid breeder_material: {breeder_material}. Must be one of {valid_materials}")
+
+    breeder_mat = mat_dict[breeder_material]
 
     # Create cylindrical surfaces
     cyl_core = openmc.ZCylinder(r=inputs['r_core'])
@@ -185,15 +199,15 @@ def create_core(mat_dict):
     rpv_2_cell.region = +cyl_rpv_1 & -cyl_rpv_2 & +plane_fuel_bottom & -plane_fuel_top
     rpv_2_cell.fill = mat_dict['rpv_steel']
 
-    # Lithium breeder blanket
-    lithium_cell = openmc.Cell(name='lithium_blanket')
-    lithium_cell.region = +cyl_rpv_2 & -cyl_lithium & +plane_fuel_bottom & -plane_fuel_top
-    lithium_cell.fill = lithium_mat
+    # Breeder blanket
+    breeder_cell = openmc.Cell(name='breeder_blanket')
+    breeder_cell.region = +cyl_rpv_2 & -cyl_lithium & +plane_fuel_bottom & -plane_fuel_top
+    breeder_cell.fill = breeder_mat
 
-    # Lithium containment wall
-    lithium_wall_cell = openmc.Cell(name='lithium_wall')
-    lithium_wall_cell.region = +cyl_lithium & -cyl_lithium_wall & +plane_fuel_bottom & -plane_fuel_top
-    lithium_wall_cell.fill = mat_dict['rpv_steel']
+    # Breeder containment wall
+    breeder_wall_cell = openmc.Cell(name='breeder_wall')
+    breeder_wall_cell.region = +cyl_lithium & -cyl_lithium_wall & +plane_fuel_bottom & -plane_fuel_top
+    breeder_wall_cell.fill = mat_dict['rpv_steel']
 
     # Top reflector
     top_reflector_cell = openmc.Cell(name='top_reflector')
@@ -207,8 +221,8 @@ def create_core(mat_dict):
         outer_tank_cell,
         rpv_1_cell,
         rpv_2_cell,
-        lithium_cell,
-        lithium_wall_cell,
+        breeder_cell,
+        breeder_wall_cell,
         top_reflector_cell
     ])
 

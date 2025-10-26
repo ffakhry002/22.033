@@ -92,6 +92,54 @@ def make_materials():
     enriched_lithium.temperature = 773  # 500°C
     materials_list.append(enriched_lithium)
 
+    # ====== FLiBe MOLTEN SALT BREEDER (Natural Lithium) ======
+    natural_flibe = openmc.Material(name='natural_flibe')
+    natural_flibe.set_density('g/cm3', 1.94)  # At 600°C
+    natural_flibe.add_nuclide('Li6', 0.0759 * 2, percent_type='ao')  # Natural Li-6 in 2 Li atoms
+    natural_flibe.add_nuclide('Li7', 0.9241 * 2, percent_type='ao')  # Natural Li-7 in 2 Li atoms
+    natural_flibe.add_element('Be', 1.0, percent_type='ao')          # 1 Be atom
+    natural_flibe.add_element('F', 4.0, percent_type='ao')           # 4 F atoms
+    natural_flibe.temperature = 873  # 600°C operating temperature
+    materials_list.append(natural_flibe)
+
+    # ====== FLiBe MOLTEN SALT BREEDER (Enriched Lithium - 90% Li-6) ======
+    enriched_flibe = openmc.Material(name='enriched_flibe')
+    enriched_flibe.set_density('g/cm3', 1.94)  # At 600°C
+    enriched_flibe.add_nuclide('Li6', 0.90 * 2, percent_type='ao')  # 90% enriched Li-6 in 2 Li atoms
+    enriched_flibe.add_nuclide('Li7', 0.10 * 2, percent_type='ao')  # 10% Li-7 in 2 Li atoms
+    enriched_flibe.add_element('Be', 1.0, percent_type='ao')        # 1 Be atom
+    enriched_flibe.add_element('F', 4.0, percent_type='ao')         # 4 F atoms
+    enriched_flibe.temperature = 873  # 600°C operating temperature
+    materials_list.append(enriched_flibe)
+
+    # ====== Pb-Li LIQUID BREEDER (Natural Lithium) ======
+    natural_pbli = openmc.Material(name='natural_pbli')
+    natural_pbli.set_density('g/cm3', 10.52)  # 10.520 kg/m³ = 10.52 g/cm³ from user
+    natural_pbli.add_element('Pb', 83.0, percent_type='ao')          # 83 at% Lead (natural isotopes)
+    natural_pbli.add_nuclide('Li6', 17.0 * 0.0759, percent_type='ao')  # Natural Li-6 in 17 at% Li
+    natural_pbli.add_nuclide('Li7', 17.0 * 0.9241, percent_type='ao')  # Natural Li-7 in 17 at% Li
+    natural_pbli.temperature = 673  # 400°C operating temperature
+    materials_list.append(natural_pbli)
+
+    # ====== Pb-Li LIQUID BREEDER (Enriched Lithium - 90% Li-6) ======
+    enriched_pbli = openmc.Material(name='enriched_pbli')
+    enriched_pbli.set_density('g/cm3', 10.52)
+    enriched_pbli.add_element('Pb', 83.0, percent_type='ao')          # 83 at% Lead (natural isotopes)
+    enriched_pbli.add_nuclide('Li6', 17.0 * 0.90, percent_type='ao')  # 90% enriched Li-6 in 17 at% Li
+    enriched_pbli.add_nuclide('Li7', 17.0 * 0.10, percent_type='ao')  # 10% Li-7 in 17 at% Li
+    enriched_pbli.temperature = 673  # 400°C operating temperature
+    materials_list.append(enriched_pbli)
+
+    # ====== Pb-Li LIQUID BREEDER (Double Enriched: Li-6 + Pb-208) ======
+    double_enriched_pbli = openmc.Material(name='double_enriched_pbli')
+    double_enriched_pbli.set_density('g/cm3', 10.52)
+    double_enriched_pbli.add_nuclide('Pb208', 83.0, percent_type='ao')  # 83 at% Pb-208 (enriched)
+    double_enriched_pbli.add_nuclide('Li6', 17.0 * 0.90, percent_type='ao')  # 90% enriched Li-6 in 17 at% Li
+    double_enriched_pbli.add_nuclide('Li7', 17.0 * 0.10, percent_type='ao')  # 10% Li-7 in 17 at% Li
+    double_enriched_pbli.temperature = 673  # 400°C operating temperature
+    materials_list.append(double_enriched_pbli)
+
+
     # Create materials collection
     materials = openmc.Materials(materials_list)
 

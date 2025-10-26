@@ -143,7 +143,7 @@ def create_cell_based_energy_tallies(geometry):
             rpv_1_cell = cell
         elif cell.name == 'rpv_layer_2':
             rpv_2_cell = cell
-        elif cell.name == 'lithium_wall':
+        elif cell.name == 'breeder_wall':
             lithium_wall_cell = cell
 
     # Check that all cells were found
@@ -155,7 +155,7 @@ def create_cell_based_energy_tallies(geometry):
     if rpv_2_cell is None:
         missing_cells.append('rpv_layer_2')
     if lithium_wall_cell is None:
-        missing_cells.append('lithium_wall')
+        missing_cells.append('breeder_wall')
 
     if missing_cells:
         raise ValueError(f"Could not find cells: {', '.join(missing_cells)}")
@@ -218,15 +218,15 @@ def create_tritium_breeding_tally(geometry):
     """Create tritium breeding ratio tallies."""
     tallies = openmc.Tallies()
 
-    # Find the lithium blanket cell
+    # Find the breeder blanket cell
     lithium_cell = None
     for cell in geometry.root_universe.cells.values():
-        if cell.name == 'lithium_blanket':
+        if cell.name == 'breeder_blanket':
             lithium_cell = cell
             break
 
     if lithium_cell is None:
-        raise ValueError("Could not find 'lithium_blanket' cell in geometry")
+        raise ValueError("Could not find 'breeder_blanket' cell in geometry")
 
     # Create cell filter
     lithium_filter = openmc.CellFilter([lithium_cell])
