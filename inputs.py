@@ -12,14 +12,11 @@ inputs = {
 
     # Core Layout - 'C' = coolant, 'F' = fuel assembly
     'core_lattice': [
-        ['C', 'C', 'F', 'F', 'F', 'F', 'C', 'C'],
-        ['C', 'F', 'F', 'F', 'F', 'F', 'F', 'C'],
-        ['F', 'F', 'F', 'F', 'F', 'F', 'F', 'F'],
-        ['F', 'F', 'F', 'F', 'F', 'F', 'F', 'F'],
-        ['F', 'F', 'F', 'F', 'F', 'F', 'F', 'F'],
-        ['F', 'F', 'F', 'F', 'F', 'F', 'F', 'F'],
-        ['C', 'F', 'F', 'F', 'F', 'F', 'F', 'C'],
-        ['C', 'C', 'F', 'F', 'F', 'F', 'C', 'C'],
+        ['C', 'C', 'F', 'C', 'C'],
+        ['C', 'F', 'F', 'F', 'C'],
+        ['F', 'F', 'F', 'F', 'F'],
+        ['C', 'F', 'F', 'F', 'C'],
+        ['C', 'C', 'F', 'C', 'C'],
     ],
 
     ###########################################
@@ -51,7 +48,7 @@ inputs = {
     ###########################################
     # Radial Geometry (all in cm)
     ###########################################
-    'r_core': 100.0,            # Core radius (fuel + outer coolant)
+    'r_core': 55,            # Core radius (fuel + outer coolant)
     'outer_tank_thickness': 10.0,  # Outer tank region (cold coolant)
     'rpv_thickness_1': 15.0,     # Inner RPV layer (liner)
     'rpv_thickness_2': 15.0,    # Outer RPV layer (main vessel)
@@ -72,7 +69,7 @@ inputs = {
     # Options: 'natural_lithium', 'enriched_lithium',
     #          'natural_flibe', 'enriched_flibe',
     #          'natural_pbli', 'enriched_pbli', 'double_enriched_pbli'
-    'breeder_material': 'enriched_lithium',
+    'breeder_material': 'natural_lithium',
 
     # Coolant temperatures and pressure
     'T_hot_celsius': 315.0,     # Hot coolant temp (inside assemblies)
