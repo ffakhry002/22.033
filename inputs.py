@@ -52,9 +52,9 @@ inputs = {
     # Radial Geometry (all in cm)
     ###########################################
     'r_core': 100.0,            # Core radius (fuel + outer coolant)
-    'outer_tank_thickness': 0.0,  # Outer tank region (cold coolant)
-    'rpv_thickness_1': 25.0,     # Inner RPV layer (liner)
-    'rpv_thickness_2': 5.0,    # Outer RPV layer (main vessel)
+    'outer_tank_thickness': 10.0,  # Outer tank region (cold coolant)
+    'rpv_thickness_1': 15.0,     # Inner RPV layer (liner)
+    'rpv_thickness_2': 15.0,    # Outer RPV layer (main vessel)
     'lithium_thickness': 30.0,  # Lithium breeding blanket
     'lithium_wall_thickness': 10.0,  # Lithium containment wall
 
@@ -93,9 +93,9 @@ inputs = {
     ###########################################
     # Simulation Settings
     ###########################################
-    'batches': 100,             # Total batches
-    'inactive': 20,             # Inactive batches
-    'particles': 10000,         # Particles per batch
+    'batches': 250,             # Total batches
+    'inactive': 50,             # Inactive batches
+    'particles': 100000,         # Particles per batch
 
     # Entropy mesh for source convergence
     'entropy_mesh_dimension': [20, 20, 20],
