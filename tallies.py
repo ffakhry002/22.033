@@ -1,5 +1,6 @@
 """
 Tallies for PWR Fusion Breeder Reactor Analysis
+Modified to include surface current tallies
 """
 import openmc
 import numpy as np
@@ -214,6 +215,107 @@ def create_cell_based_energy_tallies(geometry):
     return tallies
 
 
+def create_surface_current_tallies(geometry):
+    """Create surface current tallies to measure ONLY outward neutron leakage at key radii.
+
+    Measures OUTWARD-ONLY neutron current at:
+    - Core boundary (r_core) - from fuel region outward
+    - Outer tank boundary (r_outer_tank) - from outer tank outward
+    - RPV inner boundary (r_rpv_1) - from RPV layer 1 outward
+    - RPV outer boundary (r_rpv_2) - from RPV layer 2 outward
+    - Lithium blanket boundary (r_lithium) - from breeder blanket outward
+
+    For each surface, creates tallies for:
+    - Total current (log1001 energy bins)
+    - Thermal current
+    - Epithermal current
+    - Fast current
+
+    Note: Uses cell filters to get partial (directional) currents - only outward
+    """
+    tallies = openmc.Tallies()
+    derived = get_derived_dimensions()
+
+    # Define the cylindrical surfaces at key radii
+    surfaces = {
+        'core': openmc.ZCylinder(r=inputs['r_core'], surface_id=10001),
+        'outer_tank': openmc.ZCylinder(r=derived['r_outer_tank'], surface_id=10002),
+        'rpv_inner': openmc.ZCylinder(r=derived['r_rpv_1'], surface_id=10003),
+        'rpv_outer': openmc.ZCylinder(r=derived['r_rpv_2'], surface_id=10004),
+        'lithium': openmc.ZCylinder(r=derived['r_lithium'], surface_id=10005)
+    }
+
+    # Get cells from geometry for directional current tallies
+    # We need to identify which cells are on the "inside" of each surface
+    # to measure only outward current
+    cell_mapping = {}
+    for cell in geometry.root_universe.cells.values():
+        if cell.name == 'core_region':  # Contains the fuel lattice
+            cell_mapping['core'] = cell
+        elif cell.name == 'outer_tank':
+            cell_mapping['outer_tank'] = cell
+        elif cell.name == 'rpv_layer_1':
+            cell_mapping['rpv_inner'] = cell
+        elif cell.name == 'rpv_layer_2':
+            cell_mapping['rpv_outer'] = cell
+        elif cell.name == 'breeder_blanket':
+            cell_mapping['lithium'] = cell
+
+    # Energy filters
+    thermal_filter = openmc.EnergyFilter([0.0, inputs['thermal_cutoff']])
+    epithermal_filter = openmc.EnergyFilter([inputs['thermal_cutoff'], inputs['epithermal_cutoff']])
+    fast_filter = openmc.EnergyFilter([inputs['epithermal_cutoff'], inputs['fast_cutoff']])
+    log_1001_filter = openmc.EnergyFilter(inputs['log_1001_bins'])
+
+    # Create tallies for each surface
+    for surf_name, surface in surfaces.items():
+        # Create surface filter
+        surf_filter = openmc.SurfaceFilter(surface)
+
+        # Create cell from filter for outward current only
+        # This specifies we only want current FROM the inner cell going OUT
+        if surf_name in cell_mapping:
+            cellfrom_filter = openmc.CellFromFilter(cell_mapping[surf_name])
+
+            # LOG_1001 current (OUTWARD ONLY)
+            log1001_tally = openmc.Tally(name=f'surface_{surf_name}_current_log1001')
+            log1001_tally.filters = [surf_filter, cellfrom_filter, log_1001_filter]
+            log1001_tally.scores = ['current']  # With cellfrom filter, this gives partial current
+            tallies.append(log1001_tally)
+
+            # Thermal current (OUTWARD ONLY)
+            thermal_tally = openmc.Tally(name=f'surface_{surf_name}_current_thermal')
+            thermal_tally.filters = [surf_filter, cellfrom_filter, thermal_filter]
+            thermal_tally.scores = ['current']
+            tallies.append(thermal_tally)
+
+            # Epithermal current (OUTWARD ONLY)
+            epithermal_tally = openmc.Tally(name=f'surface_{surf_name}_current_epithermal')
+            epithermal_tally.filters = [surf_filter, cellfrom_filter, epithermal_filter]
+            epithermal_tally.scores = ['current']
+            tallies.append(epithermal_tally)
+
+            # Fast current (OUTWARD ONLY)
+            fast_tally = openmc.Tally(name=f'surface_{surf_name}_current_fast')
+            fast_tally.filters = [surf_filter, cellfrom_filter, fast_filter]
+            fast_tally.scores = ['current']
+            tallies.append(fast_tally)
+
+    print("\nCreated surface current tallies:")
+    print("  Surfaces: Core, Outer Tank, RPV Inner, RPV Outer, Lithium")
+    print("  For each surface: LOG_1001, Thermal, Epithermal, Fast current (OUTWARD ONLY)")
+    print(f"  Total: {len(tallies)} surface tallies")
+
+    return tallies
+
+    print("\nCreated surface current tallies:")
+    print("  Surfaces: Core, Outer Tank, RPV Inner, RPV Outer, Lithium")
+    print("  For each surface: LOG_1001, Thermal, Epithermal, Fast current")
+    print(f"  Total: {len(tallies)} surface tallies")
+
+    return tallies
+
+
 def create_tritium_breeding_tally(geometry):
     """Create tritium breeding ratio tallies."""
     tallies = openmc.Tallies()
@@ -279,7 +381,11 @@ def create_all_tallies(geometry):
     cell_tallies = create_cell_based_energy_tallies(geometry)
     all_tallies.extend(cell_tallies)
 
-    # 4. Tritium breeding tallies
+    # 4. Surface current tallies (NEW)
+    surface_tallies = create_surface_current_tallies(geometry)
+    all_tallies.extend(surface_tallies)
+
+    # 5. Tritium breeding tallies
     tbr_tallies = create_tritium_breeding_tally(geometry)
     all_tallies.extend(tbr_tallies)
 
