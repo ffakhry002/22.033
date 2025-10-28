@@ -6,7 +6,6 @@ import openmc
 import numpy as np
 from inputs import inputs, get_derived_dimensions
 
-
 def calc_norm_factor(power_mw, sp):
     """Calculate the normalization factor based on reactor parameters.
 
@@ -216,31 +215,7 @@ def create_cell_based_energy_tallies(geometry):
 
 
 def create_surface_current_tallies(geometry, surfaces_dict):
-    """Create surface current tallies to measure ONLY outward neutron leakage at key radii.
 
-    Measures OUTWARD-ONLY neutron current at:
-    - Core boundary (r_core) - from fuel region outward
-    - Outer tank boundary (r_outer_tank) - from outer tank outward
-    - RPV inner boundary (r_rpv_1) - from RPV layer 1 outward
-    - RPV outer boundary (r_rpv_2) - from RPV layer 2 outward
-    - Lithium blanket boundary (r_lithium) - from breeder blanket outward
-
-    Parameters
-    ----------
-    geometry : openmc.Geometry
-        The reactor geometry
-    surfaces_dict : dict
-        Dictionary of surface objects from geometry creation
-        Keys: 'cyl_core', 'cyl_outer_tank', 'cyl_rpv_1', 'cyl_rpv_2', 'cyl_lithium'
-
-    For each surface, creates tallies for:
-    - Total current (log1001 energy bins)
-    - Thermal current
-    - Epithermal current
-    - Fast current
-
-    Note: Uses cell filters to get partial (directional) currents - only outward
-    """
     tallies = openmc.Tallies()
     derived = get_derived_dimensions()
 
@@ -312,13 +287,6 @@ def create_surface_current_tallies(geometry, surfaces_dict):
     print("\nCreated surface current tallies:")
     print("  Surfaces: Core, Outer Tank, RPV Inner, RPV Outer, Lithium")
     print("  For each surface: LOG_1001, Thermal, Epithermal, Fast current (OUTWARD ONLY)")
-    print(f"  Total: {len(tallies)} surface tallies")
-
-    return tallies
-
-    print("\nCreated surface current tallies:")
-    print("  Surfaces: Core, Outer Tank, RPV Inner, RPV Outer, Lithium")
-    print("  For each surface: LOG_1001, Thermal, Epithermal, Fast current")
     print(f"  Total: {len(tallies)} surface tallies")
 
     return tallies

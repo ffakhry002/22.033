@@ -16,32 +16,13 @@ from inputs import inputs, get_derived_dimensions
 
 
 def plot_surface_current_spectrum_comparison(sp, plot_dir):
-    """Create plots showing log1001 and three-group surface current spectra for all surfaces.
-
-    Creates comparison plots for core, outer_tank, rpv_inner, rpv_outer, and lithium surfaces.
-    Column 1: log-log scale with spectrum ONLY
-    Column 2: linear-log scale with spectrum ONLY
-    Column 3: three-group ONLY with fractions, log-log scale
-
-    Note: Shows ONLY outward current using CellFromFilter
-
-    Parameters
-    ----------
-    sp : openmc.StatePoint
-        StatePoint file containing tally results
-    plot_dir : Path
-        Directory to save plots
-    """
     print("\n" + "="*70)
     print("Creating Surface Current Energy Spectrum Comparison Plots")
     print("="*70)
-    print("Note: Showing OUTWARD current only (using CellFromFilter)")
 
     # Calculate normalization factor
     power_mw = inputs['core_power']
     norm_factor = calc_norm_factor(power_mw, sp)
-
-    # Get dimensions
     derived = get_derived_dimensions()
 
     # Define surfaces to plot
@@ -53,8 +34,6 @@ def plot_surface_current_spectrum_comparison(sp, plot_dir):
         'rpv_outer': 'RPV Outer Boundary',
         'lithium': 'Lithium Blanket Boundary'
     }
-
-    # Get surface radii for reference
     surface_radii = {
         'core': inputs['r_core'],
         'outer_tank': derived['r_outer_tank'],
@@ -62,21 +41,15 @@ def plot_surface_current_spectrum_comparison(sp, plot_dir):
         'rpv_outer': derived['r_rpv_2'],
         'lithium': derived['r_lithium']
     }
-
-    # Calculate surface areas (cylindrical surfaces)
-    height = derived['z_fuel_top'] - derived['z_fuel_bottom']  # Active height
+    height = derived['z_fuel_top'] - derived['z_fuel_bottom']
     surface_areas = {}
     for surf_name, radius in surface_radii.items():
         surface_areas[surf_name] = 2 * np.pi * radius * height  # cm²
-
-    # Energy boundaries for three-group structure (in eV, will convert to MeV for plotting)
     energy_bins_eV = {
         'Thermal': (0.0, 0.625),  # eV
         'Epithermal': (0.625, 1e5),  # eV
         'Fast': (1e5, 2e7)  # eV
     }
-
-    # Convert to MeV for plotting
     energy_bins_MeV = {
         name: (e_min/1e6, e_max/1e6) for name, (e_min, e_max) in energy_bins_eV.items()
     }
@@ -85,36 +58,24 @@ def plot_surface_current_spectrum_comparison(sp, plot_dir):
     fig, axes = plt.subplots(len(surfaces), 3, figsize=(20, 4*len(surfaces)))
 
     for row_idx, surface in enumerate(surfaces):
-        # Get surface area for normalization
         surface_area = surface_areas[surface]
-
-        # Get log1001 tally
         tally_name = f'surface_{surface}_current_log1001'
         try:
             tally = sp.get_tally(name=tally_name)
         except Exception as e:
             print(f"Warning: Could not find tally {tally_name}, skipping...")
             continue
-
-        # Get energy filter and extract data
         energy_filter = tally.find_filter(openmc.EnergyFilter)
-        energy_bins_array = energy_filter.bins  # Shape: (n_bins, 2) - in eV
-        energy_mids_eV = np.sqrt(energy_bins_array[:, 0] * energy_bins_array[:, 1])  # eV
-        energy_mids_MeV = energy_mids_eV / 1e6  # Convert to MeV
-
-        # Extract outward current (already filtered by CellFromFilter)
-        # With CellFromFilter, we get only the outward partial current
+        energy_bins_array = energy_filter.bins
+        energy_mids_eV = np.sqrt(energy_bins_array[:, 0] * energy_bins_array[:, 1])
+        energy_mids_MeV = energy_mids_eV / 1e6
         current_outward = tally.mean.flatten() * norm_factor
         current_std = tally.std_dev.flatten() * norm_factor
 
-        # Convert to current density [n/cm²/s] by dividing by surface area
         current_density = current_outward / surface_area
         current_density_std = current_std / surface_area
 
-        # Ensure positive values for log scale
-        current_density = np.maximum(current_density, 1e-30)  # Avoid log(0)
-
-        # Get three-group tallies and normalize
+        current_density = np.maximum(current_density, 1e-30)
         three_group_currents = {}
         for group in ['thermal', 'epithermal', 'fast']:
             tally_name_3g = f'surface_{surface}_current_{group}'
@@ -131,7 +92,6 @@ def plot_surface_current_spectrum_comparison(sp, plot_dir):
         fractions = {name: curr/total_current if total_current > 0 else 0
                     for name, curr in three_group_currents.items()}
 
-        # --- Column 1: log-log scale (SPECTRUM ONLY) ---
         ax_left = axes[row_idx, 0] if len(surfaces) > 1 else axes[0]
 
         ax_left.loglog(energy_mids_MeV, current_density, 'b-', linewidth=2, label='log1001 Spectrum (Outward)')
@@ -151,7 +111,6 @@ def plot_surface_current_spectrum_comparison(sp, plot_dir):
             y_max = np.max(valid_current) * 10
             ax_left.set_ylim(y_min, y_max)
 
-        # --- Column 2: linear-log scale (SPECTRUM ONLY) ---
         ax_middle = axes[row_idx, 1] if len(surfaces) > 1 else axes[1]
 
         ax_middle.semilogx(energy_mids_MeV, current_density, 'b-', linewidth=2, label='log1001 Spectrum (Outward)')
@@ -164,13 +123,9 @@ def plot_surface_current_spectrum_comparison(sp, plot_dir):
         ax_middle.grid(True, which='both', alpha=0.3)
         ax_middle.set_xlim(1e-12, 20)  # 1e-6 eV to 20 MeV in MeV units
 
-        # --- Column 3: three-group ONLY with fractions, log-log ---
         ax_right = axes[row_idx, 2] if len(surfaces) > 1 else axes[2]
 
-        # Plot ONLY three-group data with solid vertical connectors
         colors_3g = {'Thermal': 'green', 'Epithermal': 'orange', 'Fast': 'red'}
-
-        # Store current values for drawing connectors
         group_order = ['Thermal', 'Epithermal', 'Fast']
         current_levels = []
 
@@ -186,12 +141,10 @@ def plot_surface_current_spectrum_comparison(sp, plot_dir):
                               colors=colors_3g[group_name], linewidth=4,
                               label=f'{group_name}: {frac:.3f}', alpha=0.8)
 
-        # Draw solid vertical connectors between adjacent groups
         for i in range(len(current_levels) - 1):
             curr_group, curr_current, _, curr_e_max = current_levels[i]
             next_group, next_current, next_e_min, _ = current_levels[i + 1]
 
-            # Draw solid vertical line at the boundary connecting the two current levels
             ax_right.vlines(curr_e_max, curr_current, next_current,
                           colors=colors_3g[curr_group], linewidth=2.5,
                           linestyles='-', alpha=0.8)
@@ -203,7 +156,6 @@ def plot_surface_current_spectrum_comparison(sp, plot_dir):
         ax_right.set_xscale('log')
         ax_right.set_yscale('log')
 
-        # Move legend outside to the right
         ax_right.legend(loc='center left', bbox_to_anchor=(1.02, 0.5), fontsize=9, frameon=True)
 
         ax_right.grid(True, which='both', alpha=0.3)
@@ -213,10 +165,6 @@ def plot_surface_current_spectrum_comparison(sp, plot_dir):
     plt.savefig(plot_dir / 'surface_current_energy_spectrum_comparison.png', dpi=300, bbox_inches='tight')
     plt.close()
 
-    print(f"Surface current spectrum plot saved to: {plot_dir / 'surface_current_energy_spectrum_comparison.png'}")
-    print("Note: All values shown are OUTWARD current only (using CellFromFilter)")
-
-# ========== Include all original plotting functions below ==========
 
 def print_tritium_production(sp):
     """Print tritium production rates in various units."""
@@ -341,15 +289,6 @@ def print_tritium_production(sp):
 
 
 def plot_keff_entropy(sp, plot_dir):
-    """Plot k-effective and Shannon entropy convergence over batches.
-
-    Parameters
-    ----------
-    sp : openmc.StatePoint
-        StatePoint file containing the simulation results
-    plot_dir : Path
-        Directory to save the plot
-    """
     print("\n" + "="*70)
     print("Creating k-effective and Entropy Plots")
     print("="*70)
