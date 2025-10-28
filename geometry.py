@@ -265,7 +265,7 @@ if __name__ == '__main__':
     print(f"Returned surfaces: {list(surfaces_dict.keys())}")
 
     # Create figures directory if it doesn't exist
-    figures_dir = Path('figures')
+    figures_dir = Path('geometry_figures')
     figures_dir.mkdir(exist_ok=True)
     print(f"\nSaving plots to '{figures_dir}' directory...")
 

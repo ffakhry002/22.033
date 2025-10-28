@@ -818,7 +818,7 @@ def main():
 
     # Define paths
     statepoint_file = 'simulation_raw/statepoint.250.h5'
-    plot_dir = Path('plots')
+    plot_dir = Path('visualization_figures')
     plot_dir.mkdir(exist_ok=True)
 
     # Load statepoint
