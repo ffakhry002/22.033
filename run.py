@@ -1,5 +1,6 @@
 """
 Run script for PWR Fusion Breeder Reactor simulation
+Modified to handle surface tallies
 """
 import openmc
 import numpy as np
@@ -94,8 +95,9 @@ def run_simulation():
     mat_dict = make_materials()
     materials = openmc.Materials([mat for mat in mat_dict.values()])
 
-    # Create geometry
-    geometry = create_core(mat_dict)
+    # Create geometry (now returns both geometry and surfaces_dict)
+    geometry, surfaces_dict = create_core(mat_dict)
+    print(f"\nGeometry created with surfaces: {list(surfaces_dict.keys())}")
 
     # Create settings
     settings = openmc.Settings()
@@ -123,8 +125,8 @@ def run_simulation():
     settings.entropy_mesh = entropy_mesh
     settings.temperature = {'method': 'interpolation'}
 
-    # Create tallies
-    tallies = create_all_tallies(geometry)
+    # Create tallies (now passing surfaces_dict)
+    tallies = create_all_tallies(geometry, surfaces_dict)
 
     # Export XML files to simulation_raw directory
     materials.export_to_xml(str(sim_dir / 'materials.xml'))

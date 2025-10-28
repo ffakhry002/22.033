@@ -1,5 +1,6 @@
 """
 Geometry for PWR Fusion Breeder Reactor
+Modified to return surfaces for tally creation
 """
 import openmc
 import numpy as np
@@ -146,7 +147,15 @@ def build_core_lattice(mat_dict, cyl_core, plane_bottom, plane_top):
 
 
 def create_core(mat_dict):
-    """Create the full core geometry with reflectors and containment."""
+    """Create the full core geometry with reflectors and containment.
+
+    Returns
+    -------
+    geometry : openmc.Geometry
+        The complete reactor geometry
+    surfaces_dict : dict
+        Dictionary of cylindrical surfaces for use in tallies
+    """
     derived = get_derived_dimensions()
 
     # Select breeder material based on configuration
@@ -169,6 +178,16 @@ def create_core(mat_dict):
     cyl_rpv_2 = openmc.ZCylinder(r=derived['r_rpv_2'])
     cyl_lithium = openmc.ZCylinder(r=derived['r_lithium'])
     cyl_lithium_wall = openmc.ZCylinder(r=derived['r_lithium_wall'], boundary_type='vacuum')
+
+    # Store surfaces in dictionary for tallies
+    surfaces_dict = {
+        'cyl_core': cyl_core,
+        'cyl_outer_tank': cyl_outer_tank,
+        'cyl_rpv_1': cyl_rpv_1,
+        'cyl_rpv_2': cyl_rpv_2,
+        'cyl_lithium': cyl_lithium,
+        'cyl_lithium_wall': cyl_lithium_wall
+    }
 
     # Create axial planes
     plane_bottom = openmc.ZPlane(z0=derived['z_bottom'], boundary_type='vacuum')
@@ -228,7 +247,7 @@ def create_core(mat_dict):
 
     geometry = openmc.Geometry(root_universe)
 
-    return geometry
+    return geometry, surfaces_dict
 
 
 if __name__ == '__main__':
@@ -240,9 +259,10 @@ if __name__ == '__main__':
     print("Creating geometry components...")
     pin_universe = BEAVRS_pin(mat_dict)
     assembly_universe = BEAVRS_assembly(mat_dict)
-    core_geometry = create_core(mat_dict)
+    core_geometry, surfaces_dict = create_core(mat_dict)
 
     print("\nGeometry created successfully!")
+    print(f"Returned surfaces: {list(surfaces_dict.keys())}")
 
     # Create figures directory if it doesn't exist
     figures_dir = Path('figures')

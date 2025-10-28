@@ -215,7 +215,7 @@ def create_cell_based_energy_tallies(geometry):
     return tallies
 
 
-def create_surface_current_tallies(geometry):
+def create_surface_current_tallies(geometry, surfaces_dict):
     """Create surface current tallies to measure ONLY outward neutron leakage at key radii.
 
     Measures OUTWARD-ONLY neutron current at:
@@ -224,6 +224,14 @@ def create_surface_current_tallies(geometry):
     - RPV inner boundary (r_rpv_1) - from RPV layer 1 outward
     - RPV outer boundary (r_rpv_2) - from RPV layer 2 outward
     - Lithium blanket boundary (r_lithium) - from breeder blanket outward
+
+    Parameters
+    ----------
+    geometry : openmc.Geometry
+        The reactor geometry
+    surfaces_dict : dict
+        Dictionary of surface objects from geometry creation
+        Keys: 'cyl_core', 'cyl_outer_tank', 'cyl_rpv_1', 'cyl_rpv_2', 'cyl_lithium'
 
     For each surface, creates tallies for:
     - Total current (log1001 energy bins)
@@ -236,13 +244,13 @@ def create_surface_current_tallies(geometry):
     tallies = openmc.Tallies()
     derived = get_derived_dimensions()
 
-    # Define the cylindrical surfaces at key radii
+    # Use the ACTUAL surfaces from geometry
     surfaces = {
-        'core': openmc.ZCylinder(r=inputs['r_core'], surface_id=10001),
-        'outer_tank': openmc.ZCylinder(r=derived['r_outer_tank'], surface_id=10002),
-        'rpv_inner': openmc.ZCylinder(r=derived['r_rpv_1'], surface_id=10003),
-        'rpv_outer': openmc.ZCylinder(r=derived['r_rpv_2'], surface_id=10004),
-        'lithium': openmc.ZCylinder(r=derived['r_lithium'], surface_id=10005)
+        'core': surfaces_dict['cyl_core'],
+        'outer_tank': surfaces_dict['cyl_outer_tank'],
+        'rpv_inner': surfaces_dict['cyl_rpv_1'],
+        'rpv_outer': surfaces_dict['cyl_rpv_2'],
+        'lithium': surfaces_dict['cyl_lithium']
     }
 
     # Get cells from geometry for directional current tallies
@@ -365,8 +373,16 @@ def create_tritium_breeding_tally(geometry):
     return tallies
 
 
-def create_all_tallies(geometry):
-    """Create all tallies for the simulation."""
+def create_all_tallies(geometry, surfaces_dict):
+    """Create all tallies for the simulation.
+
+    Parameters
+    ----------
+    geometry : openmc.Geometry
+        The reactor geometry
+    surfaces_dict : dict
+        Dictionary of surface objects from geometry creation
+    """
     all_tallies = openmc.Tallies()
 
     # 1. Normalization tallies (for flux normalization)
@@ -382,7 +398,7 @@ def create_all_tallies(geometry):
     all_tallies.extend(cell_tallies)
 
     # 4. Surface current tallies (NEW)
-    surface_tallies = create_surface_current_tallies(geometry)
+    surface_tallies = create_surface_current_tallies(geometry, surfaces_dict)
     all_tallies.extend(surface_tallies)
 
     # 5. Tritium breeding tallies
