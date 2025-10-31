@@ -134,7 +134,7 @@ def create_cell_based_energy_tallies(geometry):
     outer_tank_cell = None
     rpv_1_cell = None
     rpv_2_cell = None
-    lithium_wall_cell = None
+    lithium_blanket_cell = None
 
     for cell in geometry.root_universe.cells.values():
         if cell.name == 'outer_tank':
@@ -143,8 +143,8 @@ def create_cell_based_energy_tallies(geometry):
             rpv_1_cell = cell
         elif cell.name == 'rpv_layer_2':
             rpv_2_cell = cell
-        elif cell.name == 'breeder_wall':
-            lithium_wall_cell = cell
+        elif cell.name == 'breeder_blanket':
+            lithium_blanket_cell = cell
 
     # Check that all cells were found
     missing_cells = []
@@ -154,8 +154,8 @@ def create_cell_based_energy_tallies(geometry):
         missing_cells.append('rpv_layer_1')
     if rpv_2_cell is None:
         missing_cells.append('rpv_layer_2')
-    if lithium_wall_cell is None:
-        missing_cells.append('breeder_wall')
+    if lithium_blanket_cell is None:
+        missing_cells.append('breeder_blanket')
 
     if missing_cells:
         raise ValueError(f"Could not find cells: {', '.join(missing_cells)}")
@@ -164,7 +164,7 @@ def create_cell_based_energy_tallies(geometry):
     outer_tank_filter = openmc.CellFilter([outer_tank_cell])
     rpv_1_filter = openmc.CellFilter([rpv_1_cell])
     rpv_2_filter = openmc.CellFilter([rpv_2_cell])
-    lithium_wall_filter = openmc.CellFilter([lithium_wall_cell])
+    lithium_blanket_filter = openmc.CellFilter([lithium_blanket_cell])
 
     # Define energy filters
     thermal_filter = openmc.EnergyFilter([0.0, inputs['thermal_cutoff']])
@@ -191,7 +191,7 @@ def create_cell_based_energy_tallies(geometry):
         'outer_tank': outer_tank_filter,
         'rpv_inner': rpv_1_filter,
         'rpv_outer': rpv_2_filter,
-        'lithium_wall': lithium_wall_filter
+        'lithium_blanket': lithium_blanket_filter
     }
 
     # Add moderator region if enabled
@@ -228,7 +228,7 @@ def create_cell_based_energy_tallies(geometry):
     region_list = "Outer Tank, RPV Inner, RPV Outer"
     if inputs['enable_moderator_region']:
         region_list += ", Moderator"
-    region_list += ", Lithium Wall"
+    region_list += ", Lithium Blanket"
     print(f"  Regions: {region_list}")
     print("  For each region: LOG_1001, Thermal, Epithermal, Fast flux")
     print(f"  Total: {len(tallies)} tallies")

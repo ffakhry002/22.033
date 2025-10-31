@@ -372,17 +372,17 @@ def plot_energy_spectrum_comparison(sp, plot_dir):
     derived = get_derived_dimensions()
 
     # Define regions to plot - include both RPV layers
-    regions = ['outer_tank', 'rpv_inner', 'rpv_outer', 'lithium_wall']
+    regions = ['outer_tank', 'rpv_inner', 'rpv_outer', 'lithium_blanket']
     region_titles = {
         'outer_tank': 'Outer Tank (Cold Coolant)',
         'rpv_inner': 'RPV Inner Layer',
         'rpv_outer': 'RPV Outer Layer',
-        'lithium_wall': 'Lithium Containment Wall'
+        'lithium_blanket': 'Lithium Breeding Blanket'
     }
 
     # Add moderator region if enabled
     if inputs['enable_moderator_region']:
-        regions.insert(-1, 'moderator')  # Insert before lithium_wall
+        regions.insert(-1, 'moderator')  # Insert before lithium_blanket
         region_titles['moderator'] = 'Moderator Region'
 
     # Calculate cell volumes for each region
@@ -396,11 +396,18 @@ def plot_energy_spectrum_comparison(sp, plot_dir):
     height = derived['z_top'] - derived['z_bottom']
 
     # Calculate volumes (cylindrical shells: π * (r_outer² - r_inner²) * height)
+    # Determine inner radius for lithium blanket based on moderator configuration
+    if inputs['enable_moderator_region']:
+        r_wall_divider = derived['r_wall_divider']
+        lithium_blanket_r_inner = r_wall_divider
+    else:
+        lithium_blanket_r_inner = r_rpv_2
+
     region_volumes = {
         'outer_tank': np.pi * (r_outer_tank**2 - r_core**2) * height,
         'rpv_inner': np.pi * (r_rpv_1**2 - r_outer_tank**2) * height,
         'rpv_outer': np.pi * (r_rpv_2**2 - r_rpv_1**2) * height,
-        'lithium_wall': np.pi * (r_lithium_wall**2 - r_lithium**2) * height
+        'lithium_blanket': np.pi * (r_lithium**2 - lithium_blanket_r_inner**2) * height
     }
 
     # Add moderator volume if enabled
@@ -665,7 +672,7 @@ def plot_mesh_flux(sp, plot_dir):
         # Add moderator and wall divider circles if enabled
         if inputs['enable_moderator_region'] and r_moderator is not None:
             circle_moderator = plt.Circle((0, 0), r_moderator, fill=False,
-                                         color='yellow', linestyle='--', linewidth=1.5, label='Moderator', alpha=0.7)
+                                         color='darkblue', linestyle='--', linewidth=1.5, label='Moderator', alpha=0.7)
             ax.add_patch(circle_moderator)
         if inputs['enable_moderator_region'] and r_wall_divider is not None:
             circle_wall_divider = plt.Circle((0, 0), r_wall_divider, fill=False,
@@ -730,7 +737,7 @@ def plot_mesh_flux(sp, plot_dir):
     ax_avg.axvline(r_rpv, color='orange', linestyle=':', linewidth=1.5, alpha=0.4, label='RPV')
     # Add moderator and wall divider lines if enabled
     if inputs['enable_moderator_region'] and r_moderator is not None:
-        ax_avg.axvline(r_moderator, color='yellow', linestyle='--', linewidth=1.5, alpha=0.4, label='Moderator')
+        ax_avg.axvline(r_moderator, color='darkblue', linestyle='--', linewidth=1.5, alpha=0.4, label='Moderator')
     if inputs['enable_moderator_region'] and r_wall_divider is not None:
         ax_avg.axvline(r_wall_divider, color='lime', linestyle=':', linewidth=1.5, alpha=0.4, label='Wall Divider')
     ax_avg.axvline(r_lithium, color='magenta', linestyle='-.', linewidth=1.5, alpha=0.4, label='Lithium')
@@ -763,7 +770,7 @@ def plot_mesh_flux(sp, plot_dir):
     ax_mid.axvline(r_rpv, color='orange', linestyle=':', linewidth=1.5, alpha=0.4, label='RPV')
     # Add moderator and wall divider lines if enabled
     if inputs['enable_moderator_region'] and r_moderator is not None:
-        ax_mid.axvline(r_moderator, color='yellow', linestyle='--', linewidth=1.5, alpha=0.4, label='Moderator')
+        ax_mid.axvline(r_moderator, color='darkblue', linestyle='--', linewidth=1.5, alpha=0.4, label='Moderator')
     if inputs['enable_moderator_region'] and r_wall_divider is not None:
         ax_mid.axvline(r_wall_divider, color='lime', linestyle=':', linewidth=1.5, alpha=0.4, label='Wall Divider')
     ax_mid.axvline(r_lithium, color='magenta', linestyle='-.', linewidth=1.5, alpha=0.4, label='Lithium')

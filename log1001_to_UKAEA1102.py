@@ -139,18 +139,32 @@ def extract_cell_fluxes(sp, norm_factor, ukaea_energies, output_path):
     r_rpv_1 = derived['r_rpv_1']
     r_rpv_2 = derived['r_rpv_2']
     r_lithium = derived['r_lithium']
-    r_lithium_wall = derived['r_lithium_wall']
     height = derived['z_top'] - derived['z_bottom']
+
+    # Determine lithium blanket inner radius based on moderator configuration
+    if inputs['enable_moderator_region']:
+        r_wall_divider = derived['r_wall_divider']
+        lithium_blanket_r_inner = r_wall_divider
+    else:
+        lithium_blanket_r_inner = r_rpv_2
 
     region_volumes = {
         'outer_tank': np.pi * (r_outer_tank**2 - r_core**2) * height,
         'rpv_inner': np.pi * (r_rpv_1**2 - r_outer_tank**2) * height,
         'rpv_outer': np.pi * (r_rpv_2**2 - r_rpv_1**2) * height,
-        'lithium_wall': np.pi * (r_lithium_wall**2 - r_lithium**2) * height
+        'lithium_blanket': np.pi * (r_lithium**2 - lithium_blanket_r_inner**2) * height
     }
 
+    # Add moderator volume if enabled
+    if inputs['enable_moderator_region']:
+        r_moderator = derived['r_moderator']
+        region_volumes['moderator'] = np.pi * (r_moderator**2 - r_rpv_2**2) * height
+
     # Define regions to process
-    regions = ['outer_tank', 'rpv_inner', 'rpv_outer', 'lithium_wall']
+    regions = ['outer_tank', 'rpv_inner', 'rpv_outer']
+    if inputs['enable_moderator_region']:
+        regions.append('moderator')
+    regions.append('lithium_blanket')
 
     print("\n" + "="*70)
     print("Processing Cell Flux Tallies")
@@ -237,6 +251,11 @@ def extract_surface_currents(sp, norm_factor, ukaea_energies, output_path):
         'rpv_outer': derived['r_rpv_2'],
         'lithium': derived['r_lithium']
     }
+
+    # Add moderator region surfaces if enabled
+    if inputs['enable_moderator_region']:
+        surfaces['moderator'] = derived['r_moderator']
+        surfaces['wall_divider'] = derived['r_wall_divider']
 
     # Calculate surface areas (cylindrical surfaces)
     # Using active fuel height for consistency

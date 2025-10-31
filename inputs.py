@@ -60,7 +60,7 @@ inputs = {
     # Moderator region configuration (after RPV, before lithium)
     'enable_moderator_region': True,  # Toggle to enable/disable moderator region
     'moderator_thickness': 20.0,  # Thickness of moderator region (cm)
-    'moderator_material': 'room_temp_lightwater',  # Material for moderator region (options: 'heavy_water', 'ap_1000_coolant_outer', etc.)
+    'moderator_material': 'heavy_water',  # Material for moderator region (options: 'heavy_water', 'ap_1000_coolant_outer', etc.)
     'wall_divider_thickness': 2.0,  # Thickness of wall divider between moderator and lithium (cm)
 
     ###########################################
@@ -77,7 +77,7 @@ inputs = {
     # Options: 'natural_lithium', 'enriched_lithium',
     #          'natural_flibe', 'enriched_flibe',
     #          'natural_pbli', 'enriched_pbli', 'double_enriched_pbli'
-    'breeder_material': 'natural_lithium',
+    'breeder_material': 'enriched_lithium',
 
     # Coolant temperatures and pressure
     'T_hot_celsius': 315.0,     # Hot coolant temp (inside assemblies)
@@ -102,9 +102,9 @@ inputs = {
     ###########################################
     # Simulation Settings
     ###########################################
-    'batches': 250,             # Total batches
+    'batches': 500,             # Total batches
     'inactive': 50,             # Inactive batches
-    'particles': 100000,         # Particles per batch
+    'particles': 200000,         # Particles per batch
 
     # Entropy mesh for source convergence
     'entropy_mesh_dimension': [20, 20, 20],
