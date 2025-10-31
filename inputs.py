@@ -57,6 +57,12 @@ inputs = {
     'lithium_thickness': 30.0,  # Lithium breeding blanket
     'lithium_wall_thickness': 10.0,  # Lithium containment wall
 
+    # Moderator region configuration (after RPV, before lithium)
+    'enable_moderator_region': True,  # Toggle to enable/disable moderator region
+    'moderator_thickness': 20.0,  # Thickness of moderator region (cm)
+    'moderator_material': 'room_temp_lightwater',  # Material for moderator region (options: 'heavy_water', 'ap_1000_coolant_outer', etc.)
+    'wall_divider_thickness': 2.0,  # Thickness of wall divider between moderator and lithium (cm)
+
     ###########################################
     # Axial Geometry (all in cm)
     ###########################################
@@ -121,7 +127,17 @@ def get_derived_dimensions():
     derived['r_outer_tank'] = inputs['r_core'] + inputs['outer_tank_thickness']
     derived['r_rpv_1'] = derived['r_outer_tank'] + inputs['rpv_thickness_1']
     derived['r_rpv_2'] = derived['r_rpv_1'] + inputs['rpv_thickness_2']
-    derived['r_lithium'] = derived['r_rpv_2'] + inputs['lithium_thickness']
+
+    # Handle moderator region (if enabled)
+    if inputs['enable_moderator_region']:
+        derived['r_moderator'] = derived['r_rpv_2'] + inputs['moderator_thickness']
+        derived['r_wall_divider'] = derived['r_moderator'] + inputs['wall_divider_thickness']
+        derived['r_lithium'] = derived['r_wall_divider'] + inputs['lithium_thickness']
+    else:
+        derived['r_moderator'] = derived['r_rpv_2']  # Not used when disabled
+        derived['r_wall_divider'] = derived['r_rpv_2']  # Not used when disabled
+        derived['r_lithium'] = derived['r_rpv_2'] + inputs['lithium_thickness']
+
     derived['r_lithium_wall'] = derived['r_lithium'] + inputs['lithium_wall_thickness']
 
     # Total axial dimensions

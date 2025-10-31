@@ -172,6 +172,20 @@ def create_cell_based_energy_tallies(geometry):
     fast_filter = openmc.EnergyFilter([inputs['epithermal_cutoff'], inputs['fast_cutoff']])
     log_1001_filter = openmc.EnergyFilter(inputs['log_1001_bins'])
 
+    # Find moderator region cell if enabled
+    moderator_filter = None
+    if inputs['enable_moderator_region']:
+        moderator_cell = None
+        for cell in geometry.root_universe.cells.values():
+            if cell.name == 'moderator_region':
+                moderator_cell = cell
+                break
+
+        if moderator_cell is None:
+            raise ValueError("Could not find 'moderator_region' cell in geometry")
+
+        moderator_filter = openmc.CellFilter([moderator_cell])
+
     # Dictionary mapping cell filters to names
     regions = {
         'outer_tank': outer_tank_filter,
@@ -179,6 +193,10 @@ def create_cell_based_energy_tallies(geometry):
         'rpv_outer': rpv_2_filter,
         'lithium_wall': lithium_wall_filter
     }
+
+    # Add moderator region if enabled
+    if inputs['enable_moderator_region'] and moderator_filter is not None:
+        regions['moderator'] = moderator_filter
 
     # Create tallies for each region
     for region_name, cell_filter in regions.items():
@@ -207,7 +225,11 @@ def create_cell_based_energy_tallies(geometry):
         tallies.append(fast_tally)
 
     print("\nCreated cell-based energy-discretized tallies:")
-    print("  Regions: Outer Tank, RPV Inner, RPV Outer, Lithium Wall")
+    region_list = "Outer Tank, RPV Inner, RPV Outer"
+    if inputs['enable_moderator_region']:
+        region_list += ", Moderator"
+    region_list += ", Lithium Wall"
+    print(f"  Regions: {region_list}")
     print("  For each region: LOG_1001, Thermal, Epithermal, Fast flux")
     print(f"  Total: {len(tallies)} tallies")
 
@@ -228,6 +250,13 @@ def create_surface_current_tallies(geometry, surfaces_dict):
         'lithium': surfaces_dict['cyl_lithium']
     }
 
+    # Add moderator region surfaces if enabled
+    if inputs['enable_moderator_region']:
+        if 'cyl_moderator' in surfaces_dict:
+            surfaces['moderator'] = surfaces_dict['cyl_moderator']
+        if 'cyl_wall_divider' in surfaces_dict:
+            surfaces['wall_divider'] = surfaces_dict['cyl_wall_divider']
+
     # Get cells from geometry for directional current tallies
     # We need to identify which cells are on the "inside" of each surface
     # to measure only outward current
@@ -243,6 +272,11 @@ def create_surface_current_tallies(geometry, surfaces_dict):
             cell_mapping['rpv_outer'] = cell
         elif cell.name == 'breeder_blanket':
             cell_mapping['lithium'] = cell
+        elif inputs['enable_moderator_region']:
+            if cell.name == 'moderator_region':
+                cell_mapping['moderator'] = cell
+            elif cell.name == 'wall_divider':
+                cell_mapping['wall_divider'] = cell
 
     # Energy filters
     thermal_filter = openmc.EnergyFilter([0.0, inputs['thermal_cutoff']])
@@ -285,7 +319,11 @@ def create_surface_current_tallies(geometry, surfaces_dict):
             tallies.append(fast_tally)
 
     print("\nCreated surface current tallies:")
-    print("  Surfaces: Core, Outer Tank, RPV Inner, RPV Outer, Lithium")
+    surface_list = "Core, Outer Tank, RPV Inner, RPV Outer"
+    if inputs['enable_moderator_region']:
+        surface_list += ", Moderator, Wall Divider"
+    surface_list += ", Lithium"
+    print(f"  Surfaces: {surface_list}")
     print("  For each surface: LOG_1001, Thermal, Epithermal, Fast current (OUTWARD ONLY)")
     print(f"  Total: {len(tallies)} surface tallies")
 

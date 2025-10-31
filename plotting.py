@@ -41,6 +41,15 @@ def plot_surface_current_spectrum_comparison(sp, plot_dir):
         'rpv_outer': derived['r_rpv_2'],
         'lithium': derived['r_lithium']
     }
+    
+    # Add moderator region surfaces if enabled
+    if inputs['enable_moderator_region']:
+        surfaces.insert(-1, 'moderator')  # Insert before lithium
+        surfaces.insert(-1, 'wall_divider')  # Insert before lithium
+        surface_titles['moderator'] = 'Moderator Boundary'
+        surface_titles['wall_divider'] = 'Wall Divider Boundary'
+        surface_radii['moderator'] = derived['r_moderator']
+        surface_radii['wall_divider'] = derived['r_wall_divider']
     height = derived['z_fuel_top'] - derived['z_fuel_bottom']
     surface_areas = {}
     for surf_name, radius in surface_radii.items():
@@ -370,6 +379,11 @@ def plot_energy_spectrum_comparison(sp, plot_dir):
         'rpv_outer': 'RPV Outer Layer',
         'lithium_wall': 'Lithium Containment Wall'
     }
+    
+    # Add moderator region if enabled
+    if inputs['enable_moderator_region']:
+        regions.insert(-1, 'moderator')  # Insert before lithium_wall
+        region_titles['moderator'] = 'Moderator Region'
 
     # Calculate cell volumes for each region
     # These are cylindrical shell volumes
@@ -388,6 +402,11 @@ def plot_energy_spectrum_comparison(sp, plot_dir):
         'rpv_outer': np.pi * (r_rpv_2**2 - r_rpv_1**2) * height,
         'lithium_wall': np.pi * (r_lithium_wall**2 - r_lithium**2) * height
     }
+    
+    # Add moderator volume if enabled
+    if inputs['enable_moderator_region']:
+        r_moderator = derived['r_moderator']
+        region_volumes['moderator'] = np.pi * (r_moderator**2 - r_rpv_2**2) * height
 
     # Energy boundaries for three-group structure (in eV, will convert to MeV for plotting)
     energy_bins_eV = {

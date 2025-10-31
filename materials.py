@@ -139,6 +139,33 @@ def make_materials():
     double_enriched_pbli.temperature = 673  # 400°C operating temperature
     materials_list.append(double_enriched_pbli)
 
+    # ====== HEAVY WATER (D2O) ======
+    # Room temperature and atmospheric pressure
+    T_d2o = 298.15  # 25°C in Kelvin
+    P_d2o = 101325.0  # Atmospheric pressure in Pa
+    rho_d2o = PropsSI('D', 'T', T_d2o, 'P', P_d2o, 'HeavyWater')  # kg/m³
+
+    d2o = openmc.Material(name='heavy_water')
+    d2o.add_nuclide('H2', 2.0)
+    d2o.add_nuclide('O16', 1.0)
+    d2o.set_density('g/cm3', rho_d2o / 1000)
+    d2o.add_s_alpha_beta('c_D_in_D2O')
+    d2o.temperature = T_d2o
+    materials_list.append(d2o)
+
+
+    # ====== LIGHT WATER (Room Temperature, Atmospheric Pressure) ======
+    T_room = 298.15  # 25°C in Kelvin
+    P_atm = 101325.0  # Atmospheric pressure in Pa
+    rho_room = PropsSI('D', 'T', T_room, 'P', P_atm, 'Water')  # kg/m³
+
+    room_temp_lightwater = openmc.Material(name='room_temp_lightwater')
+    room_temp_lightwater.add_nuclide('H1', 2.0)
+    room_temp_lightwater.add_nuclide('O16', 1.0)
+    room_temp_lightwater.set_density('g/cm3', rho_room / 1000)
+    room_temp_lightwater.add_s_alpha_beta('c_H_in_H2O')
+    room_temp_lightwater.temperature = T_room
+    materials_list.append(room_temp_lightwater)
 
     # Create materials collection
     materials = openmc.Materials(materials_list)

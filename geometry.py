@@ -23,7 +23,9 @@ MATERIAL_COLORS = {
     'enriched_flibe': 'limegreen',
     'natural_pbli': 'silver',
     'enriched_pbli': 'lightgray',
-    'double_enriched_pbli': 'slategray'
+    'double_enriched_pbli': 'slategray',
+    'heavy_water': 'cyan',
+    'room_temp_lightwater': 'lightcyan',
 }
 
 def BEAVRS_pin(mat_dict):
@@ -176,7 +178,17 @@ def create_core(mat_dict):
     cyl_outer_tank = openmc.ZCylinder(r=derived['r_outer_tank'])
     cyl_rpv_1 = openmc.ZCylinder(r=derived['r_rpv_1'])
     cyl_rpv_2 = openmc.ZCylinder(r=derived['r_rpv_2'])
-    cyl_lithium = openmc.ZCylinder(r=derived['r_lithium'])
+
+    # Create surfaces for moderator region (if enabled)
+    if inputs['enable_moderator_region']:
+        cyl_moderator = openmc.ZCylinder(r=derived['r_moderator'])
+        cyl_wall_divider = openmc.ZCylinder(r=derived['r_wall_divider'])
+        cyl_lithium = openmc.ZCylinder(r=derived['r_lithium'])
+    else:
+        cyl_moderator = None
+        cyl_wall_divider = None
+        cyl_lithium = openmc.ZCylinder(r=derived['r_lithium'])
+
     cyl_lithium_wall = openmc.ZCylinder(r=derived['r_lithium_wall'], boundary_type='vacuum')
 
     # Store surfaces in dictionary for tallies
@@ -188,6 +200,11 @@ def create_core(mat_dict):
         'cyl_lithium': cyl_lithium,
         'cyl_lithium_wall': cyl_lithium_wall
     }
+
+    # Add moderator surfaces to dictionary if enabled
+    if inputs['enable_moderator_region']:
+        surfaces_dict['cyl_moderator'] = cyl_moderator
+        surfaces_dict['cyl_wall_divider'] = cyl_wall_divider
 
     # Create axial planes
     plane_bottom = openmc.ZPlane(z0=derived['z_bottom'], boundary_type='vacuum')
@@ -218,32 +235,59 @@ def create_core(mat_dict):
     rpv_2_cell.region = +cyl_rpv_1 & -cyl_rpv_2 & +plane_fuel_bottom & -plane_fuel_top
     rpv_2_cell.fill = mat_dict['rpv_steel']
 
-    # Breeder blanket
-    breeder_cell = openmc.Cell(name='breeder_blanket')
-    breeder_cell.region = +cyl_rpv_2 & -cyl_lithium & +plane_fuel_bottom & -plane_fuel_top
-    breeder_cell.fill = breeder_mat
+    # Build list of cells for root universe
+    root_cells = [
+        bottom_reflector_cell,
+        fuel_region_cell,
+        outer_tank_cell,
+        rpv_1_cell,
+        rpv_2_cell
+    ]
+
+    # Add moderator region and wall divider if enabled
+    if inputs['enable_moderator_region']:
+        # Moderator region
+        moderator_mat_name = inputs['moderator_material']
+        if moderator_mat_name not in mat_dict:
+            raise ValueError(f"Invalid moderator_material: {moderator_mat_name}. Must be one of {list(mat_dict.keys())}")
+
+        moderator_cell = openmc.Cell(name='moderator_region')
+        moderator_cell.region = +cyl_rpv_2 & -cyl_moderator & +plane_fuel_bottom & -plane_fuel_top
+        moderator_cell.fill = mat_dict[moderator_mat_name]
+        root_cells.append(moderator_cell)
+
+        # Wall divider (between moderator and lithium)
+        wall_divider_cell = openmc.Cell(name='wall_divider')
+        wall_divider_cell.region = +cyl_moderator & -cyl_wall_divider & +plane_fuel_bottom & -plane_fuel_top
+        wall_divider_cell.fill = mat_dict['rpv_steel']
+        root_cells.append(wall_divider_cell)
+
+        # Breeder blanket (starts at wall_divider when moderator is enabled)
+        breeder_cell = openmc.Cell(name='breeder_blanket')
+        breeder_cell.region = +cyl_wall_divider & -cyl_lithium & +plane_fuel_bottom & -plane_fuel_top
+        breeder_cell.fill = breeder_mat
+    else:
+        # Breeder blanket (starts at RPV_2 when moderator is disabled)
+        breeder_cell = openmc.Cell(name='breeder_blanket')
+        breeder_cell.region = +cyl_rpv_2 & -cyl_lithium & +plane_fuel_bottom & -plane_fuel_top
+        breeder_cell.fill = breeder_mat
+
+    root_cells.append(breeder_cell)
 
     # Breeder containment wall
     breeder_wall_cell = openmc.Cell(name='breeder_wall')
     breeder_wall_cell.region = +cyl_lithium & -cyl_lithium_wall & +plane_fuel_bottom & -plane_fuel_top
     breeder_wall_cell.fill = mat_dict['rpv_steel']
+    root_cells.append(breeder_wall_cell)
 
     # Top reflector
     top_reflector_cell = openmc.Cell(name='top_reflector')
     top_reflector_cell.region = -cyl_lithium_wall & +plane_fuel_top & -plane_top
     top_reflector_cell.fill = mat_dict['rpv_steel']
+    root_cells.append(top_reflector_cell)
 
     # Create root universe and geometry
-    root_universe = openmc.Universe(cells=[
-        bottom_reflector_cell,
-        fuel_region_cell,
-        outer_tank_cell,
-        rpv_1_cell,
-        rpv_2_cell,
-        breeder_cell,
-        breeder_wall_cell,
-        top_reflector_cell
-    ])
+    root_universe = openmc.Universe(cells=root_cells)
 
     geometry = openmc.Geometry(root_universe)
 
