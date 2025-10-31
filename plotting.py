@@ -438,8 +438,9 @@ def plot_energy_spectrum_comparison(sp, plot_dir):
         tally_name = f'{region}_flux_log1001'
         try:
             tally = sp.get_tally(name=tally_name)
+            print(f"  Processing {tally_name}: found, volume = {cell_volume:.2e} cm³")
         except Exception as e:
-            print(f"Warning: Could not find tally {tally_name}, skipping...")
+            print(f"Warning: Could not find tally {tally_name}, skipping... (Error: {e})")
             continue
 
         # Get energy filter and extract data
@@ -451,6 +452,8 @@ def plot_energy_spectrum_comparison(sp, plot_dir):
         # Apply normalization AND divide by cell volume to get flux density
         flux = tally.mean.flatten() * norm_factor / cell_volume
         flux_std = tally.std_dev.flatten() * norm_factor / cell_volume
+
+        print(f"    Total flux: {np.sum(flux):.4e} n/cm²/s, Max: {np.max(flux):.4e}, Non-zero bins: {np.count_nonzero(flux)}/{len(flux)}")
 
         # Get three-group tallies and normalize
         three_group_fluxes = {}

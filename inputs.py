@@ -77,7 +77,7 @@ inputs = {
     # Options: 'natural_lithium', 'enriched_lithium',
     #          'natural_flibe', 'enriched_flibe',
     #          'natural_pbli', 'enriched_pbli', 'double_enriched_pbli'
-    'breeder_material': 'enriched_lithium',
+    'breeder_material': 'enriched_flibe',
 
     # Coolant temperatures and pressure
     'T_hot_celsius': 315.0,     # Hot coolant temp (inside assemblies)
