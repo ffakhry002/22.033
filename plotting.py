@@ -41,7 +41,7 @@ def plot_surface_current_spectrum_comparison(sp, plot_dir):
         'rpv_outer': derived['r_rpv_2'],
         'lithium': derived['r_lithium']
     }
-    
+
     # Add moderator region surfaces if enabled
     if inputs['enable_moderator_region']:
         surfaces.insert(-1, 'moderator')  # Insert before lithium
@@ -379,7 +379,7 @@ def plot_energy_spectrum_comparison(sp, plot_dir):
         'rpv_outer': 'RPV Outer Layer',
         'lithium_wall': 'Lithium Containment Wall'
     }
-    
+
     # Add moderator region if enabled
     if inputs['enable_moderator_region']:
         regions.insert(-1, 'moderator')  # Insert before lithium_wall
@@ -402,7 +402,7 @@ def plot_energy_spectrum_comparison(sp, plot_dir):
         'rpv_outer': np.pi * (r_rpv_2**2 - r_rpv_1**2) * height,
         'lithium_wall': np.pi * (r_lithium_wall**2 - r_lithium**2) * height
     }
-    
+
     # Add moderator volume if enabled
     if inputs['enable_moderator_region']:
         r_moderator = derived['r_moderator']
@@ -610,6 +610,13 @@ def plot_mesh_flux(sp, plot_dir):
     r_lithium = derived['r_lithium']
     r_lithium_wall = derived['r_lithium_wall']
 
+    # Moderator and wall divider radii (if enabled)
+    r_moderator = None
+    r_wall_divider = None
+    if inputs['enable_moderator_region']:
+        r_moderator = derived['r_moderator']
+        r_wall_divider = derived['r_wall_divider']
+
     # =================================================================
     # PLOT 1: SPATIAL HEATMAPS (2x2 grid, axially averaged only)
     # =================================================================
@@ -654,6 +661,16 @@ def plot_mesh_flux(sp, plot_dir):
         ax.add_patch(circle_rpv)
         ax.add_patch(circle_lithium)
         ax.add_patch(circle_wall)
+
+        # Add moderator and wall divider circles if enabled
+        if inputs['enable_moderator_region'] and r_moderator is not None:
+            circle_moderator = plt.Circle((0, 0), r_moderator, fill=False,
+                                         color='yellow', linestyle='--', linewidth=1.5, label='Moderator', alpha=0.7)
+            ax.add_patch(circle_moderator)
+        if inputs['enable_moderator_region'] and r_wall_divider is not None:
+            circle_wall_divider = plt.Circle((0, 0), r_wall_divider, fill=False,
+                                            color='lime', linestyle=':', linewidth=1.5, label='Wall Divider', alpha=0.7)
+            ax.add_patch(circle_wall_divider)
 
         ax.set_xlabel('X [cm]', fontsize=12)
         ax.set_ylabel('Y [cm]', fontsize=12)
@@ -711,6 +728,11 @@ def plot_mesh_flux(sp, plot_dir):
     ax_avg.axvline(r_core, color='red', linestyle='--', linewidth=1.5, alpha=0.4, label='Core')
     ax_avg.axvline(r_outer_tank, color='cyan', linestyle='--', linewidth=1.5, alpha=0.4, label='Tank')
     ax_avg.axvline(r_rpv, color='orange', linestyle=':', linewidth=1.5, alpha=0.4, label='RPV')
+    # Add moderator and wall divider lines if enabled
+    if inputs['enable_moderator_region'] and r_moderator is not None:
+        ax_avg.axvline(r_moderator, color='yellow', linestyle='--', linewidth=1.5, alpha=0.4, label='Moderator')
+    if inputs['enable_moderator_region'] and r_wall_divider is not None:
+        ax_avg.axvline(r_wall_divider, color='lime', linestyle=':', linewidth=1.5, alpha=0.4, label='Wall Divider')
     ax_avg.axvline(r_lithium, color='magenta', linestyle='-.', linewidth=1.5, alpha=0.4, label='Lithium')
 
     ax_avg.set_xlabel('Radius [cm]', fontsize=12)
@@ -739,6 +761,11 @@ def plot_mesh_flux(sp, plot_dir):
     ax_mid.axvline(r_core, color='red', linestyle='--', linewidth=1.5, alpha=0.4, label='Core')
     ax_mid.axvline(r_outer_tank, color='cyan', linestyle='--', linewidth=1.5, alpha=0.4, label='Tank')
     ax_mid.axvline(r_rpv, color='orange', linestyle=':', linewidth=1.5, alpha=0.4, label='RPV')
+    # Add moderator and wall divider lines if enabled
+    if inputs['enable_moderator_region'] and r_moderator is not None:
+        ax_mid.axvline(r_moderator, color='yellow', linestyle='--', linewidth=1.5, alpha=0.4, label='Moderator')
+    if inputs['enable_moderator_region'] and r_wall_divider is not None:
+        ax_mid.axvline(r_wall_divider, color='lime', linestyle=':', linewidth=1.5, alpha=0.4, label='Wall Divider')
     ax_mid.axvline(r_lithium, color='magenta', linestyle='-.', linewidth=1.5, alpha=0.4, label='Lithium')
 
     ax_mid.set_xlabel('Radius [cm]', fontsize=12)

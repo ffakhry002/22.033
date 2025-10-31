@@ -261,6 +261,7 @@ def create_surface_current_tallies(geometry, surfaces_dict):
     # We need to identify which cells are on the "inside" of each surface
     # to measure only outward current
     cell_mapping = {}
+    wall_divider_cell = None
     for cell in geometry.root_universe.cells.values():
         if cell.name == 'core_region':  # Contains the fuel lattice
             cell_mapping['core'] = cell
@@ -276,7 +277,11 @@ def create_surface_current_tallies(geometry, surfaces_dict):
             if cell.name == 'moderator_region':
                 cell_mapping['moderator'] = cell
             elif cell.name == 'wall_divider':
-                cell_mapping['wall_divider'] = cell
+                wall_divider_cell = cell  # Store for wall_divider surface
+
+    # For wall_divider surface, outward current is FROM wall_divider cell (inside) going OUT
+    if inputs['enable_moderator_region'] and wall_divider_cell is not None:
+        cell_mapping['wall_divider'] = wall_divider_cell
 
     # Energy filters
     thermal_filter = openmc.EnergyFilter([0.0, inputs['thermal_cutoff']])

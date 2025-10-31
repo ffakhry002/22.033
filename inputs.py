@@ -88,7 +88,7 @@ inputs = {
     # Tally Configuration
     ###########################################
     # Full reactor flux mesh discretization
-    'n_radial_bins': 200,        # Number of radial bins
+    'n_radial_bins': 400,        # Number of radial bins
     'n_axial_bins': 200,         # Number of axial bins
 
     # Energy group definitions (eV)
