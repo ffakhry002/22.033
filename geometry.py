@@ -175,21 +175,14 @@ def CANDU_assembly(mat_dict):
     pt_outer = openmc.ZCylinder(r=pressure_tube_or)
     calandria_inner = openmc.ZCylinder(r=calandria_ir)
     calandria_outer = openmc.ZCylinder(r=calandria_or)
-    moderator_outer = openmc.ZCylinder(r=moderator_or)
-
-    # Create boundary planes (square boundary for moderator)
-    half_width = moderator_or
-    fuel_x0 = openmc.XPlane(x0=-half_width, boundary_type='reflective')
-    fuel_x1 = openmc.XPlane(x0=half_width, boundary_type='reflective')
-    fuel_y0 = openmc.YPlane(y0=-half_width, boundary_type='reflective')
-    fuel_y1 = openmc.YPlane(y0=half_width, boundary_type='reflective')
 
     # Create cells
     bundle = openmc.Cell(fill=bundle_universe, region=-pt_inner)
     pressure_tube = openmc.Cell(fill=mat_dict['candu_pressure_tube'], region=+pt_inner & -pt_outer)
     gap_cell = openmc.Cell(fill=mat_dict['candu_gap'], region=+pt_outer & -calandria_inner)
     calandria = openmc.Cell(fill=mat_dict['candu_calandria_tube'], region=+calandria_inner & -calandria_outer)
-    moder = openmc.Cell(fill=mat_dict['candu_moderator'], region=+calandria_outer & +fuel_x0 & -fuel_x1 & +fuel_y0 & -fuel_y1)
+    # Moderator fills the rest of the universe (no boundary planes needed in lattice)
+    moder = openmc.Cell(fill=mat_dict['candu_moderator'], region=+calandria_outer)
 
     root_universe = openmc.Universe(cells=[bundle, pressure_tube, gap_cell, calandria, moder])
 
