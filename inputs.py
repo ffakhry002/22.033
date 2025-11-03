@@ -8,10 +8,41 @@ inputs = {
     ###########################################
     # Core Configuration
     ###########################################
-    'core_power': 800.0,  # MW
+    # Assembly type: 'candu' or 'ap1000'
+    'assembly_type': 'candu',  # Toggle between CANDU and AP1000 assembly
 
-    # Core Layout - 'C' = coolant, 'F' = fuel assembly
-    'core_lattice': [
+    'core_power': 1500.0,  # MW
+
+    # CANDU Core Layout - 'C' = coolant, 'F' = fuel assembly
+    # Pattern: 22, 22, 22, 20, 20, 18, 18, 16, 14, 12, 6 (mirrored)
+    # Exactly 380 fuel assemblies in 22x22 grid
+    'candu_lattice': [
+        ['C', 'C', 'C', 'C', 'C', 'C', 'C', 'C', 'F', 'F', 'F', 'F', 'F', 'F', 'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C'],
+        ['C', 'C', 'C', 'C', 'C', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'C', 'C', 'C', 'C', 'C'],
+        ['C', 'C', 'C', 'C', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'C', 'C', 'C', 'C'],
+        ['C', 'C', 'C', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'C', 'C', 'C'],
+        ['C', 'C', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'C', 'C'],
+        ['C', 'C', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'C', 'C'],
+        ['C', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'C'],
+        ['C', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'C'],
+        ['F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F'],
+        ['F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F'],
+        ['F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F'],
+        ['F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F'],
+        ['F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F'],
+        ['F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F'],
+        ['C', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'C'],
+        ['C', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'C'],
+        ['C', 'C', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'C', 'C'],
+        ['C', 'C', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'C', 'C'],
+        ['C', 'C', 'C', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'C', 'C', 'C'],
+        ['C', 'C', 'C', 'C', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'C', 'C', 'C', 'C'],
+        ['C', 'C', 'C', 'C', 'C', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'C', 'C', 'C', 'C', 'C'],
+        ['C', 'C', 'C', 'C', 'C', 'C', 'C', 'C', 'F', 'F', 'F', 'F', 'F', 'F', 'C', 'C', 'C', 'C', 'C', 'C', 'C', 'C'],
+    ],
+
+    # AP1000 Core Layout - 'C' = coolant, 'F' = fuel assembly
+    'ap1000_lattice': [
         ['C', 'C', 'F', 'F', 'F', 'F', 'C', 'C'],
         ['C', 'F', 'F', 'F', 'F', 'F', 'F', 'C'],
         ['F', 'F', 'F', 'F', 'F', 'F', 'F', 'F'],
@@ -48,17 +79,53 @@ inputs = {
     ],
 
     ###########################################
+    # CANDU Assembly Configuration
+    ###########################################
+    # CANDU temperatures (K)
+    'candu_T_fuel': 973.15,      # Fuel temperature
+    'candu_T_clad': 563.16,      # Cladding temperature
+    'candu_T_mod': 343.15,       # Moderator temperature
+    'candu_T_cool': 563.15,      # Coolant temperature
+    'candu_T_box': 544.16,       # Calandria/pressure tube temperature
+
+    # CANDU fuel pin dimensions (cm)
+    'candu_r_fuel': 0.59825,     # Fuel outer radius
+    'candu_clad_thickness': 0.605,  # Cladding thickness (from fuel surface)
+    'candu_r_clad': 0.655,      # Cladding outer radius
+
+    # CANDU bundle geometry (cm)
+    'candu_pressure_tube_ir': 5.1689,    # Pressure tube inner radius
+    'candu_pressure_tube_or': 5.621,     # Pressure tube outer radius
+    'candu_calandria_ir': 6.6002,        # Calandria tube inner radius
+    'candu_calandria_or': 6.7526,       # Calandria tube outer radius
+    'candu_moderator_or': 14.2875,      # Moderator outer radius
+
+    # CANDU pin layout - ring radii from center (cm)
+    'candu_ring_radii': [0.0, 1.49, 2.875, 4.333],
+    'candu_num_pins': [1, 6, 12, 18],   # Number of pins per ring
+    'candu_ring_angles': [0, 30, 15, 30],  # Starting angles for each ring (degrees)
+
+    # CANDU assembly pitch (spacing between assembly centers in core lattice)
+    # If not specified, defaults to 2 * candu_moderator_or
+    'candu_assembly_pitch': 28.575,  # cm
+
+    # CANDU fuel compositions (different rings use different fuel materials)
+    'candu_fuel_density': 10.65,  # g/cm³
+    'candu_U235_enrichment': 0.00711,  # Atomic fraction (0.711%)
+    'candu_U238_fraction': 0.99289,     # Atomic fraction
+
+    ###########################################
     # Radial Geometry (all in cm)
     ###########################################
-    'r_core': 100,            # Core radius (fuel + outer coolant)
-    'outer_tank_thickness': 10.0,  # Outer tank region (cold coolant)
-    'rpv_thickness_1': 15.0,     # Inner RPV layer (liner)
-    'rpv_thickness_2': 15.0,    # Outer RPV layer (main vessel)
+    'r_core': 379.7,            # Core radius (fuel + outer coolant)
+    'outer_tank_thickness': 0,  # Outer tank region (cold coolant)
+    'rpv_thickness_1': 2.9/2,     # Inner RPV layer (liner)
+    'rpv_thickness_2': 2.9/2,    # Outer RPV layer (main vessel)
     'lithium_thickness': 30.0,  # Lithium breeding blanket
     'lithium_wall_thickness': 10.0,  # Lithium containment wall
 
     # Moderator region configuration (after RPV, before lithium)
-    'enable_moderator_region': True,  # Toggle to enable/disable moderator region
+    'enable_moderator_region': False,  # Toggle to enable/disable moderator region
     'moderator_thickness': 20.0,  # Thickness of moderator region (cm)
     'moderator_material': 'heavy_water',  # Material for moderator region (options: 'heavy_water', 'ap_1000_coolant_outer', etc.)
     'wall_divider_thickness': 2.0,  # Thickness of wall divider between moderator and lithium (cm)
@@ -67,7 +134,7 @@ inputs = {
     # Axial Geometry (all in cm)
     ###########################################
     'bottom_reflector_thickness': 40.0,  # Bottom reflector
-    'fuel_height': 400.0,                # Active fuel height
+    'fuel_height': 594.4,                # Active fuel height
     'top_reflector_thickness': 40.0,     # Top reflector
 
     ###########################################
@@ -77,7 +144,7 @@ inputs = {
     # Options: 'natural_lithium', 'enriched_lithium',
     #          'natural_flibe', 'enriched_flibe',
     #          'natural_pbli', 'enriched_pbli', 'double_enriched_pbli'
-    'breeder_material': 'enriched_flibe',
+    'breeder_material': 'enriched_lithium',
 
     # Coolant temperatures and pressure
     'T_hot_celsius': 315.0,     # Hot coolant temp (inside assemblies)
@@ -88,7 +155,7 @@ inputs = {
     # Tally Configuration
     ###########################################
     # Full reactor flux mesh discretization
-    'n_radial_bins': 400,        # Number of radial bins
+    'n_radial_bins': 1000,        # Number of radial bins
     'n_axial_bins': 200,         # Number of axial bins
 
     # Energy group definitions (eV)
@@ -120,8 +187,17 @@ inputs = {
 def get_derived_dimensions():
     derived = {}
 
-    # Assembly width (cm)
-    derived['assembly_width'] = inputs['n_pins'] * inputs['pin_pitch']
+    # Assembly width/pitch (cm) - depends on assembly type
+    if inputs['assembly_type'] == 'candu':
+        # For CANDU, use specified pitch or default to 2 * moderator_or
+        if inputs.get('candu_assembly_pitch') is not None:
+            derived['assembly_width'] = inputs['candu_assembly_pitch']
+        else:
+            # Default: use the moderator outer radius as the assembly size
+            derived['assembly_width'] = 2 * inputs['candu_moderator_or']
+    else:
+        # AP1000 uses lattice-based assembly
+        derived['assembly_width'] = inputs['n_pins'] * inputs['pin_pitch']
 
     # Total radial dimensions
     derived['r_outer_tank'] = inputs['r_core'] + inputs['outer_tank_thickness']
@@ -155,7 +231,13 @@ def get_derived_dimensions():
     ]
 
     # --- Power density calculation in kW/L (= MW/m^3) ---
-    n_fuel_assemblies = sum(row.count('F') for row in inputs['core_lattice'])
+    # Select appropriate lattice based on assembly type
+    if inputs['assembly_type'] == 'candu':
+        core_lattice = inputs['candu_lattice']
+    else:
+        core_lattice = inputs['ap1000_lattice']
+
+    n_fuel_assemblies = sum(row.count('F') for row in core_lattice)
     assembly_width_m = derived['assembly_width'] / 100.0 # (cm to m)
     assembly_height_m = inputs['fuel_height'] / 100.0
     assembly_volume_m3 = assembly_width_m * assembly_width_m * assembly_height_m

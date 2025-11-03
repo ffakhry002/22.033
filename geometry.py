@@ -26,7 +26,168 @@ MATERIAL_COLORS = {
     'double_enriched_pbli': 'slategray',
     'heavy_water': 'cyan',
     'room_temp_lightwater': 'lightcyan',
+    # CANDU materials
+    'candu_fuel_central': 'lightgray',
+    'candu_fuel_inner': 'darkgray',
+    'candu_fuel_intermediate': 'gray',
+    'candu_fuel_outer': 'dimgray',
+    'candu_cladding': 'yellow',
+    'candu_coolant': 'blue',
+    'candu_moderator': 'lightblue',
+    'candu_pressure_tube': 'black',
+    'candu_calandria_tube': 'black',
+    'candu_gap': 'white',
+    'candu_fuel_gap': 'green',
 }
+
+def CANDU_pin(mat_dict, fuel_mat_name):
+    """Create a CANDU fuel pin cell universe with specified fuel material."""
+    from math import pi, cos, sin
+
+    r_fuel = inputs['candu_r_fuel']
+    clad_thickness = inputs['candu_clad_thickness']
+    r_clad = inputs['candu_r_clad']
+
+    # Create surfaces
+    fuel_surface = openmc.ZCylinder(r=r_fuel)
+    clad_fuel = openmc.ZCylinder(r=clad_thickness)
+    clad_surface = openmc.ZCylinder(r=r_clad)
+
+    # Create cells
+    fuel_cell = openmc.Cell(name='candu_fuel', fill=mat_dict[fuel_mat_name])
+    fuel_cell.region = -fuel_surface
+
+    gap_cell = openmc.Cell(name='candu_fuel_gap', fill=mat_dict['candu_fuel_gap'])
+    gap_cell.region = +fuel_surface & -clad_fuel
+
+    clad_cell = openmc.Cell(name='candu_cladding', fill=mat_dict['candu_cladding'])
+    clad_cell.region = +clad_fuel & -clad_surface
+
+    coolant_cell = openmc.Cell(name='candu_coolant', fill=mat_dict['candu_coolant'])
+    coolant_cell.region = +clad_surface
+
+    pin_universe = openmc.Universe(name='candu_pin', cells=[fuel_cell, gap_cell, clad_cell, coolant_cell])
+    return pin_universe
+
+
+def CANDU_bundle(mat_dict):
+    """Create a CANDU fuel bundle with ring layout."""
+    from math import pi, cos, sin
+
+    ring_radii = np.array(inputs['candu_ring_radii'])
+    num_pins = inputs['candu_num_pins']
+    angles = inputs['candu_ring_angles']
+
+    r_fuel = inputs['candu_r_fuel']
+    clad_thickness = inputs['candu_clad_thickness']
+    r_clad = inputs['candu_r_clad']
+
+    # Fuel materials for each ring
+    fuel_materials = ['candu_fuel_central', 'candu_fuel_inner', 'candu_fuel_intermediate', 'candu_fuel_outer']
+
+    # Create surfaces that divide rings
+    radial_surf = [openmc.ZCylinder(r=r) for r in (ring_radii[:-1] + ring_radii[1:]) / 2]
+
+    # Create coolant cells for each ring (will be modified to exclude pins)
+    water_cells = []
+    for i in range(len(ring_radii)):
+        # Create annular region
+        if i == 0:
+            water_region = -radial_surf[i]
+        elif i == len(ring_radii) - 1:
+            water_region = +radial_surf[i-1]
+        else:
+            water_region = +radial_surf[i-1] & -radial_surf[i]
+
+        water_cell = openmc.Cell(fill=mat_dict['candu_coolant'], region=water_region)
+        water_cells.append(water_cell)
+
+    # Create bundle universe
+    bundle_universe = openmc.Universe(cells=water_cells)
+
+    # Create fuel pin surfaces
+    surf_fuel = openmc.ZCylinder(r=r_fuel)
+    clad_fuel = openmc.ZCylinder(r=clad_thickness)
+
+    pin_cells = []
+    fuel_cells = []
+    x_coord = []
+    y_coord = []
+
+    # Create pins for each ring
+    for i, (r, n, a) in enumerate(zip(ring_radii, num_pins, angles)):
+        fuel_mat_name = fuel_materials[i]
+
+        for j in range(n):
+            # Determine location of center of pin
+            theta = (a + j/n*360.) * pi/180.
+            x = r*cos(theta)
+            y = r*sin(theta)
+
+            pin_boundary = openmc.ZCylinder(x0=x, y0=y, r=r_clad)
+            # Exclude pin from water region (like in notebook)
+            water_cells[i].region &= +pin_boundary
+            x_coord.append(x)
+            y_coord.append(y)
+
+            # Create fuel cell
+            fuel_cell = openmc.Cell(fill=mat_dict[fuel_mat_name], region=-surf_fuel)
+            fuel_cell.id = (i + 1) * 1000 + j
+            fuel_cells.append(fuel_cell)
+
+            # Create gap and cladding cells
+            gap_cell = openmc.Cell(fill=mat_dict['candu_fuel_gap'], region=+surf_fuel & -clad_fuel)
+            clad_cell = openmc.Cell(fill=mat_dict['candu_cladding'], region=+clad_fuel)
+            pin_universe = openmc.Universe(cells=(fuel_cell, gap_cell, clad_cell))
+
+            # Create pin cell
+            pin = openmc.Cell(fill=pin_universe, region=-pin_boundary)
+            pin.translation = (x, y, 0)
+            pin.id = (i + 1)*100 + j
+            bundle_universe.add_cell(pin)
+            pin_cells.append(pin)
+
+    return bundle_universe
+
+
+def CANDU_assembly(mat_dict):
+    """Create a CANDU fuel assembly with pressure tube, calandria, and moderator."""
+    from math import pi
+
+    bundle_universe = CANDU_bundle(mat_dict)
+
+    # Tube radii
+    pressure_tube_ir = inputs['candu_pressure_tube_ir']
+    pressure_tube_or = inputs['candu_pressure_tube_or']
+    calandria_ir = inputs['candu_calandria_ir']
+    calandria_or = inputs['candu_calandria_or']
+    moderator_or = inputs['candu_moderator_or']
+
+    # Create surfaces
+    pt_inner = openmc.ZCylinder(r=pressure_tube_ir)
+    pt_outer = openmc.ZCylinder(r=pressure_tube_or)
+    calandria_inner = openmc.ZCylinder(r=calandria_ir)
+    calandria_outer = openmc.ZCylinder(r=calandria_or)
+    moderator_outer = openmc.ZCylinder(r=moderator_or)
+
+    # Create boundary planes (square boundary for moderator)
+    half_width = moderator_or
+    fuel_x0 = openmc.XPlane(x0=-half_width, boundary_type='reflective')
+    fuel_x1 = openmc.XPlane(x0=half_width, boundary_type='reflective')
+    fuel_y0 = openmc.YPlane(y0=-half_width, boundary_type='reflective')
+    fuel_y1 = openmc.YPlane(y0=half_width, boundary_type='reflective')
+
+    # Create cells
+    bundle = openmc.Cell(fill=bundle_universe, region=-pt_inner)
+    pressure_tube = openmc.Cell(fill=mat_dict['candu_pressure_tube'], region=+pt_inner & -pt_outer)
+    gap_cell = openmc.Cell(fill=mat_dict['candu_gap'], region=+pt_outer & -calandria_inner)
+    calandria = openmc.Cell(fill=mat_dict['candu_calandria_tube'], region=+calandria_inner & -calandria_outer)
+    moder = openmc.Cell(fill=mat_dict['candu_moderator'], region=+calandria_outer & +fuel_x0 & -fuel_x1 & +fuel_y0 & -fuel_y1)
+
+    root_universe = openmc.Universe(cells=[bundle, pressure_tube, gap_cell, calandria, moder])
+
+    return root_universe
+
 
 def BEAVRS_pin(mat_dict):
     """Create a BEAVRS fuel pin cell universe."""
@@ -107,15 +268,27 @@ def build_core_lattice(mat_dict, cyl_core, plane_bottom, plane_top):
     derived = get_derived_dimensions()
     assembly_width = derived['assembly_width']
 
-    fuel_assembly = BEAVRS_assembly(mat_dict)
+    # Choose assembly type based on inputs
+    if inputs['assembly_type'] == 'candu':
+        fuel_assembly = CANDU_assembly(mat_dict)
+        # For CANDU, use moderator as outer coolant
+        coolant_outer_universe = openmc.Universe(name='coolant_outer')
+        coolant_cell = openmc.Cell(fill=mat_dict['candu_moderator'])
+        coolant_outer_universe.add_cell(coolant_cell)
+    else:
+        fuel_assembly = BEAVRS_assembly(mat_dict)
+        # Outer coolant universe (cold coolant)
+        coolant_outer_universe = openmc.Universe(name='coolant_outer')
+        coolant_cell = openmc.Cell(fill=mat_dict['ap_1000_coolant_outer'])
+        coolant_outer_universe.add_cell(coolant_cell)
 
-    # Outer coolant universe (cold coolant)
-    coolant_outer_universe = openmc.Universe(name='coolant_outer')
-    coolant_cell = openmc.Cell(fill=mat_dict['ap_1000_coolant_outer'])
-    coolant_outer_universe.add_cell(coolant_cell)
+    # Select appropriate lattice based on assembly type
+    if inputs['assembly_type'] == 'candu':
+        core_lattice = inputs['candu_lattice']
+    else:
+        core_lattice = inputs['ap1000_lattice']
 
     # Build lattice universes array
-    core_lattice = inputs['core_lattice']
     n_rows = len(core_lattice)
     n_cols = len(core_lattice[0])
     lattice_universes = []
@@ -223,7 +396,11 @@ def create_core(mat_dict):
     # Outer tank (cold coolant between core and RPV)
     outer_tank_cell = openmc.Cell(name='outer_tank')
     outer_tank_cell.region = +cyl_core & -cyl_outer_tank & +plane_fuel_bottom & -plane_fuel_top
-    outer_tank_cell.fill = mat_dict['ap_1000_coolant_outer']
+    # Use appropriate coolant material based on assembly type
+    if inputs['assembly_type'] == 'candu':
+        outer_tank_cell.fill = mat_dict['candu_moderator']
+    else:
+        outer_tank_cell.fill = mat_dict['ap_1000_coolant_outer']
 
     # RPV Layer 1
     rpv_1_cell = openmc.Cell(name='rpv_layer_1')
@@ -301,8 +478,13 @@ if __name__ == '__main__':
     mat_colors = {mat_dict[name]: color for name, color in MATERIAL_COLORS.items()}
 
     print("Creating geometry components...")
-    pin_universe = BEAVRS_pin(mat_dict)
-    assembly_universe = BEAVRS_assembly(mat_dict)
+    if inputs['assembly_type'] == 'candu':
+        # For CANDU, create a pin from the first ring
+        pin_universe = CANDU_pin(mat_dict, 'candu_fuel_central')
+        assembly_universe = CANDU_assembly(mat_dict)
+    else:
+        pin_universe = BEAVRS_pin(mat_dict)
+        assembly_universe = BEAVRS_assembly(mat_dict)
     core_geometry, surfaces_dict = create_core(mat_dict)
 
     print("\nGeometry created successfully!")
@@ -331,9 +513,16 @@ if __name__ == '__main__':
 
     # Plot assembly
     print("Plotting assembly...")
+    # Use larger width for CANDU assemblies
+    if inputs['assembly_type'] == 'candu':
+        assembly_width = 2 * inputs['candu_moderator_or']  # ~28.6 cm
+        plot_width = (assembly_width * 1.2, assembly_width * 1.2)  # Add some margin
+    else:
+        plot_width = (25.0, 25.0)
+
     assembly_params = {
         'basis': 'xy',
-        'width': (25.0, 25.0),
+        'width': plot_width,
         'pixels': inputs['plot_pixels'],
         'color_by': 'material',
         'colors': mat_colors
@@ -345,10 +534,14 @@ if __name__ == '__main__':
 
     # Plot core XY
     print("Plotting core XY...")
+    # Auto-adjust width based on lithium wall radius (add some margin)
+    r_max = derived['r_lithium_wall']
+    core_xy_width = 2 * r_max * 1.1  # Add 10% margin
+
     core_xy_params = {
         'basis': 'xy',
         'origin': (0, 0, derived['z_fuel_bottom'] + inputs['fuel_height']/2),
-        'width': (400.0, 400.0),
+        'width': (core_xy_width, core_xy_width),
         'pixels': inputs['plot_pixels'],
         'color_by': 'material',
         'colors': mat_colors
@@ -360,10 +553,49 @@ if __name__ == '__main__':
 
     # Plot core XZ
     print("Plotting core XZ...")
+    # Calculate x and y coordinates to slice through middle of a fuel assembly
+    # Select appropriate lattice based on assembly type
+    if inputs['assembly_type'] == 'candu':
+        core_lattice = inputs['candu_lattice']
+    else:
+        core_lattice = inputs['ap1000_lattice']
+
+    n_rows = len(core_lattice)
+    n_cols = len(core_lattice[0])
+
+    # Find center of a fuel assembly in the lattice
+    # Look for a fuel assembly closest to the center (0, 0)
+    fuel_assembly_pos = None
+    min_distance = float('inf')
+
+    for row_idx, row in enumerate(core_lattice):
+        for col_idx, symbol in enumerate(row):
+            if symbol == 'F':
+                # Calculate center position of this assembly
+                x_center = (col_idx - n_cols/2 + 0.5) * derived['assembly_width']
+                y_center = (row_idx - n_rows/2 + 0.5) * derived['assembly_width']
+                # Calculate distance from center
+                distance = (x_center**2 + y_center**2)**0.5
+                # Keep the assembly closest to center
+                if distance < min_distance:
+                    min_distance = distance
+                    fuel_assembly_pos = (x_center, y_center)
+
+    # Default to (0, 0) if no fuel assembly found or for CANDU (which is centered)
+    if fuel_assembly_pos is None or inputs['assembly_type'] == 'candu':
+        x_slice = 0.0  # Center of CANDU assembly
+        y_slice = 0.0  # Center of CANDU assembly
+    else:
+        x_slice = fuel_assembly_pos[0]  # X-coordinate of assembly center
+        y_slice = fuel_assembly_pos[1]  # Y-coordinate to slice through assembly center
+
+    # Auto-adjust width based on lithium wall radius
+    core_xz_width = 2 * r_max * 1.1  # Add 10% margin
+
     core_xz_params = {
         'basis': 'xz',
-        'origin': (0, 1, derived['z_top']/2),
-        'width': (400.0, derived['z_top']*1.1),
+        'origin': (x_slice, y_slice, derived['z_top']/2),
+        'width': (core_xz_width, derived['z_top']*1.1),
         'pixels': inputs['plot_pixels'],
         'color_by': 'material',
         'colors': mat_colors
