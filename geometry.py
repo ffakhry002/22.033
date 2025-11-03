@@ -168,7 +168,10 @@ def CANDU_assembly(mat_dict):
     pressure_tube_or = inputs['candu_pressure_tube_or']
     calandria_ir = inputs['candu_calandria_ir']
     calandria_or = inputs['candu_calandria_or']
-    moderator_or = inputs['candu_moderator_or']
+
+    # Get the lattice pitch to properly bound the assembly within its lattice cell
+    lattice_pitch = inputs.get('candu_assembly_pitch', 2 * inputs['candu_moderator_or'])
+    half_pitch = lattice_pitch / 2.0
 
     # Create surfaces
     pt_inner = openmc.ZCylinder(r=pressure_tube_ir)
@@ -176,13 +179,22 @@ def CANDU_assembly(mat_dict):
     calandria_inner = openmc.ZCylinder(r=calandria_ir)
     calandria_outer = openmc.ZCylinder(r=calandria_or)
 
+    # Add bounding box for lattice cell (prevents overlap with neighboring cells)
+    x_min = openmc.XPlane(x0=-half_pitch)
+    x_max = openmc.XPlane(x0=half_pitch)
+    y_min = openmc.YPlane(y0=-half_pitch)
+    y_max = openmc.YPlane(y0=half_pitch)
+
+    # Define lattice cell boundary
+    lattice_boundary = +x_min & -x_max & +y_min & -y_max
+
     # Create cells
     bundle = openmc.Cell(fill=bundle_universe, region=-pt_inner)
     pressure_tube = openmc.Cell(fill=mat_dict['candu_pressure_tube'], region=+pt_inner & -pt_outer)
     gap_cell = openmc.Cell(fill=mat_dict['candu_gap'], region=+pt_outer & -calandria_inner)
     calandria = openmc.Cell(fill=mat_dict['candu_calandria_tube'], region=+calandria_inner & -calandria_outer)
-    # Moderator fills the rest of the universe (no boundary planes needed in lattice)
-    moder = openmc.Cell(fill=mat_dict['candu_moderator'], region=+calandria_outer)
+    # Moderator bounded by lattice cell to prevent overlap with neighboring assemblies
+    moder = openmc.Cell(fill=mat_dict['candu_moderator'], region=+calandria_outer & lattice_boundary)
 
     root_universe = openmc.Universe(cells=[bundle, pressure_tube, gap_cell, calandria, moder])
 
