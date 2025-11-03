@@ -117,8 +117,8 @@ inputs = {
     ###########################################
     # Radial Geometry (all in cm)
     ###########################################
-    'r_core': 379.7,            # Core radius (fuel + outer coolant)
-    'outer_tank_thickness': 0,  # Outer tank region (cold coolant)
+    'r_core': 330,            # Core radius (fuel + outer coolant)
+    'outer_tank_thickness': 50,  # Outer tank region (cold coolant)
     'rpv_thickness_1': 2.9/2,     # Inner RPV layer (liner)
     'rpv_thickness_2': 2.9/2,    # Outer RPV layer (main vessel)
     'lithium_thickness': 30.0,  # Lithium breeding blanket
@@ -169,8 +169,8 @@ inputs = {
     ###########################################
     # Simulation Settings
     ###########################################
-    'batches': 500,             # Total batches
-    'inactive': 50,             # Inactive batches
+    'batches': int(500),             # Total batches
+    'inactive': int(50),             # Inactive batches
     'particles': int(200000),         # Particles per batch
     # Maximum number of particle events (OpenMC default: 1,000,000)
     'max_particle_events': 1000000000,

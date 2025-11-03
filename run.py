@@ -145,7 +145,7 @@ def run_simulation():
     os.chdir(sim_dir)
 
     try:
-        openmc.run()
+        openmc.run(geometry_debug=True)
     finally:
         # Return to original directory
         os.chdir(original_dir)
