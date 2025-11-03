@@ -273,7 +273,7 @@ def make_materials():
     # CANDU Pressure Tube
     candu_pressure_tube = openmc.Material(name='candu_pressure_tube', temperature=T_box)
     candu_pressure_tube.add_nuclide('Nb93', 0.025, 'wo')
-    candu_pressure_tube.add_nuclide('C', 0.00027, 'wo')
+    candu_pressure_tube.add_element('C', 0.00027, percent_type='wo')  # Natural carbon
     candu_pressure_tube.add_nuclide('Cr52', 0.000085, 'wo')
     candu_pressure_tube.add_nuclide('Cr53', 0.000009, 'wo')
     candu_pressure_tube.add_nuclide('Cr54', 0.000002, 'wo')

@@ -104,6 +104,7 @@ def run_simulation():
     settings.batches = inputs['batches']
     settings.inactive = inputs['inactive']
     settings.particles = inputs['particles']
+    settings.max_particle_events = inputs['max_particle_events']
     settings.run_mode = 'eigenvalue'
 
     # Source distribution

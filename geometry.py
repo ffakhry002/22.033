@@ -105,9 +105,12 @@ def CANDU_bundle(mat_dict):
     # Create bundle universe
     bundle_universe = openmc.Universe(cells=water_cells)
 
-    # Create fuel pin surfaces
+    # Create fuel pin surfaces (centered at origin, will be translated per pin)
     surf_fuel = openmc.ZCylinder(r=r_fuel)
-    clad_fuel = openmc.ZCylinder(r=clad_thickness)
+    # clad_thickness is the cladding inner radius (from fuel surface)
+    clad_inner_surf = openmc.ZCylinder(r=clad_thickness)
+    # Cladding outer surface (at origin, relative to pin center)
+    clad_outer_surf = openmc.ZCylinder(r=r_clad)
 
     pin_cells = []
     fuel_cells = []
@@ -130,14 +133,18 @@ def CANDU_bundle(mat_dict):
             x_coord.append(x)
             y_coord.append(y)
 
-            # Create fuel cell
+            # Create fuel cell (relative to pin center)
             fuel_cell = openmc.Cell(fill=mat_dict[fuel_mat_name], region=-surf_fuel)
             fuel_cell.id = (i + 1) * 1000 + j
             fuel_cells.append(fuel_cell)
 
-            # Create gap and cladding cells
-            gap_cell = openmc.Cell(fill=mat_dict['candu_fuel_gap'], region=+surf_fuel & -clad_fuel)
-            clad_cell = openmc.Cell(fill=mat_dict['candu_cladding'], region=+clad_fuel)
+            # Create gap cell (between fuel and cladding inner)
+            gap_cell = openmc.Cell(fill=mat_dict['candu_fuel_gap'], region=+surf_fuel & -clad_inner_surf)
+
+            # Create cladding cell (between cladding inner and outer)
+            # All surfaces are at origin relative to pin center (universe will be translated)
+            clad_cell = openmc.Cell(fill=mat_dict['candu_cladding'], region=+clad_inner_surf & -clad_outer_surf)
+
             pin_universe = openmc.Universe(cells=(fuel_cell, gap_cell, clad_cell))
 
             # Create pin cell

@@ -171,7 +171,9 @@ inputs = {
     ###########################################
     'batches': 500,             # Total batches
     'inactive': 50,             # Inactive batches
-    'particles': 200000,         # Particles per batch
+    'particles': int(200000),         # Particles per batch
+    # Maximum number of particle events (OpenMC default: 1,000,000)
+    'max_particle_events': 1000000000,
 
     # Entropy mesh for source convergence
     'entropy_mesh_dimension': [20, 20, 20],
