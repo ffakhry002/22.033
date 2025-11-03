@@ -26,6 +26,7 @@ MATERIAL_COLORS = {
     'double_enriched_pbli': 'slategray',
     'heavy_water': 'cyan',
     'room_temp_lightwater': 'lightcyan',
+    'helium_moderator': 'white',
     # CANDU materials
     'candu_fuel_central': 'lightgray',
     'candu_fuel_inner': 'darkgray',

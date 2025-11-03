@@ -9,9 +9,9 @@ inputs = {
     # Core Configuration
     ###########################################
     # Assembly type: 'candu' or 'ap1000'
-    'assembly_type': 'candu',  # Toggle between CANDU and AP1000 assembly
+    'assembly_type': 'ap1000',  # Toggle between CANDU and AP1000 assembly
 
-    'core_power': 1500.0,  # MW
+    'core_power': 800.0,  # MW
 
     # CANDU Core Layout - 'C' = coolant, 'F' = fuel assembly
     # Pattern: 22, 22, 22, 20, 20, 18, 18, 16, 14, 12, 6 (mirrored)
@@ -117,17 +117,17 @@ inputs = {
     ###########################################
     # Radial Geometry (all in cm)
     ###########################################
-    'r_core': 330,            # Core radius (fuel + outer coolant)
-    'outer_tank_thickness': 50,  # Outer tank region (cold coolant)
-    'rpv_thickness_1': 2.9/2,     # Inner RPV layer (liner)
-    'rpv_thickness_2': 2.9/2,    # Outer RPV layer (main vessel)
+    'r_core': 100,            # Core radius (fuel + outer coolant)
+    'outer_tank_thickness': 0,  # Outer tank region (cold coolant)
+    'rpv_thickness_1': 15,     # Inner RPV layer (liner)
+    'rpv_thickness_2': 15,    # Outer RPV layer (main vessel)
     'lithium_thickness': 30.0,  # Lithium breeding blanket
     'lithium_wall_thickness': 10.0,  # Lithium containment wall
 
     # Moderator region configuration (after RPV, before lithium)
-    'enable_moderator_region': False,  # Toggle to enable/disable moderator region
-    'moderator_thickness': 20.0,  # Thickness of moderator region (cm)
-    'moderator_material': 'heavy_water',  # Material for moderator region (options: 'heavy_water', 'ap_1000_coolant_outer', etc.)
+    'enable_moderator_region': True,  # Toggle to enable/disable moderator region
+    'moderator_thickness': 7.5,  # Thickness of moderator region (cm)
+    'moderator_material': 'helium_moderator',  # Material for moderator region (options: 'heavy_water', 'ap_1000_coolant_outer', etc.)
     'wall_divider_thickness': 2.0,  # Thickness of wall divider between moderator and lithium (cm)
 
     ###########################################

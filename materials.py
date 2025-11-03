@@ -24,6 +24,15 @@ def make_materials():
     he_gap.temperature = 600.0  # K
     materials_list.append(he_gap)
 
+
+    # ====== HELIUM moderator ======
+    he_moderator = openmc.Material(name='helium_moderator')
+    he_moderator.add_element('He', 1.0)
+    he_moderator.set_density('g/cm3', 0.000164)
+    he_moderator.temperature = 298.0  # K
+    materials_list.append(he_moderator)
+
+
     # ====== ZIRCALOY CLADDING ======
     zircaloy = openmc.Material(name='ap_1000_cladding')
     zircaloy.add_element('Zr', 0.9821, percent_type='wo')
