@@ -142,10 +142,13 @@ def CANDU_bundle(mat_dict):
             gap_cell = openmc.Cell(fill=mat_dict['candu_fuel_gap'], region=+surf_fuel & -clad_inner_surf)
 
             # Create cladding cell (between cladding inner and outer)
-            # All surfaces are at origin relative to pin center (universe will be translated)
             clad_cell = openmc.Cell(fill=mat_dict['candu_cladding'], region=+clad_inner_surf & -clad_outer_surf)
 
-            pin_universe = openmc.Universe(cells=(fuel_cell, gap_cell, clad_cell))
+            # CRITICAL FIX: Add coolant cell extending infinitely outward (like BEAVRS)
+            coolant_cell = openmc.Cell(fill=mat_dict['candu_coolant'], region=+clad_outer_surf)
+
+            # Pin universe now has 4 cells: fuel, gap, clad, coolant (matching BEAVRS style)
+            pin_universe = openmc.Universe(cells=(fuel_cell, gap_cell, clad_cell, coolant_cell))
 
             # Create pin cell
             pin = openmc.Cell(fill=pin_universe, region=-pin_boundary)
@@ -169,37 +172,24 @@ def CANDU_assembly(mat_dict):
     calandria_ir = inputs['candu_calandria_ir']
     calandria_or = inputs['candu_calandria_or']
 
-    # Get the lattice pitch to properly bound the assembly within its lattice cell
-    lattice_pitch = inputs.get('candu_assembly_pitch', 2 * inputs['candu_moderator_or'])
-    half_pitch = lattice_pitch / 2.0
-
     # Create surfaces
     pt_inner = openmc.ZCylinder(r=pressure_tube_ir)
     pt_outer = openmc.ZCylinder(r=pressure_tube_or)
     calandria_inner = openmc.ZCylinder(r=calandria_ir)
     calandria_outer = openmc.ZCylinder(r=calandria_or)
 
-    # Add bounding box for lattice cell (prevents overlap with neighboring cells)
-    x_min = openmc.XPlane(x0=-half_pitch)
-    x_max = openmc.XPlane(x0=half_pitch)
-    y_min = openmc.YPlane(y0=-half_pitch)
-    y_max = openmc.YPlane(y0=half_pitch)
-
-    # Define lattice cell boundary
-    lattice_boundary = +x_min & -x_max & +y_min & -y_max
-
     # Create cells
+    # Note: No explicit boundaries needed - lattice automatically handles cell boundaries
     bundle = openmc.Cell(fill=bundle_universe, region=-pt_inner)
     pressure_tube = openmc.Cell(fill=mat_dict['candu_pressure_tube'], region=+pt_inner & -pt_outer)
     gap_cell = openmc.Cell(fill=mat_dict['candu_gap'], region=+pt_outer & -calandria_inner)
     calandria = openmc.Cell(fill=mat_dict['candu_calandria_tube'], region=+calandria_inner & -calandria_outer)
-    # Moderator bounded by lattice cell to prevent overlap with neighboring assemblies
-    moder = openmc.Cell(fill=mat_dict['candu_moderator'], region=+calandria_outer & lattice_boundary)
+    # Moderator fills everything outside calandria - lattice handles boundaries
+    moder = openmc.Cell(fill=mat_dict['candu_moderator'], region=+calandria_outer)
 
     root_universe = openmc.Universe(cells=[bundle, pressure_tube, gap_cell, calandria, moder])
 
     return root_universe
-
 
 def BEAVRS_pin(mat_dict):
     """Create a BEAVRS fuel pin cell universe."""

@@ -103,6 +103,7 @@ def run_simulation():
     settings = openmc.Settings()
     settings.batches = inputs['batches']
     settings.inactive = inputs['inactive']
+    settings.survival_biasing = False
     settings.particles = inputs['particles']
     settings.max_particle_events = inputs['max_particle_events']
     settings.run_mode = 'eigenvalue'
