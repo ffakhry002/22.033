@@ -407,7 +407,8 @@ def SFR_pin(mat_dict, fuel_mat_name):
     fuel_cell = openmc.Cell(name='sfr_fuel', fill=mat_dict[fuel_mat_name])
     fuel_cell.region = -fuel_surface
 
-    gap_cell = openmc.Cell(name='sfr_gap', fill=mat_dict['sodium'])
+    # Gap filled with FUEL (same as benchmark!) - not sodium
+    gap_cell = openmc.Cell(name='sfr_gap', fill=mat_dict[fuel_mat_name])
     gap_cell.region = +fuel_surface & -gap_outer_surface
 
     clad_cell = openmc.Cell(name='sfr_cladding', fill=mat_dict['sfr_clad'])
