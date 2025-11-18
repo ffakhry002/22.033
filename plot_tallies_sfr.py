@@ -494,28 +494,52 @@ def plot_sfr_tritium_assembly_heatmap(sp, output_dir='tally_figures'):
                               norm=plt.matplotlib.colors.LogNorm(vmin=vmin, vmax=vmax),
                               shading='flat')
 
-            # Add hexagonal assembly boundaries (3x3 grid centered at origin)
-            # Draw hexagons for visual reference
+            # Add hexagonal assembly boundaries
+            # Draw hexagons using proper hexagonal lattice positions
             from matplotlib.patches import RegularPolygon
-            for i in range(-1, 2):
-                for j in range(-1, 2):
-                    # Hexagonal lattice positioning
-                    x_asm = i * assembly_width
-                    y_asm = j * assembly_width * np.sqrt(3)/2  # Hex offset
 
-                    # Create hexagon
-                    hexagon = RegularPolygon(
-                        (x_asm, y_asm),
-                        numVertices=6,
-                        radius=hex_edge * 2/np.sqrt(3),  # Convert edge to circumradius
-                        orientation=0,  # 'x' orientation (flat-top)
-                        fill=False,
-                        edgecolor='white',
-                        linewidth=2,
-                        linestyle='--',
-                        alpha=0.7
-                    )
-                    ax.add_patch(hexagon)
+            # Center hexagon (tritium breeder at origin)
+            hex_circumradius = hex_edge * 2 / np.sqrt(3)
+
+            hexagon_center = RegularPolygon(
+                (0, 0),
+                numVertices=6,
+                radius=hex_circumradius,
+                orientation=0,  # flat-top (orientation='x')
+                fill=False,
+                edgecolor='white',
+                linewidth=3,
+                linestyle='-',
+                alpha=0.9,
+                label='Tritium Breeder'
+            )
+            ax.add_patch(hexagon_center)
+
+            # Ring 1: 6 hexagons around center
+            # For flat-topped hex lattice, nearest neighbors are at:
+            pitch = assembly_width
+            hex_positions = [
+                (pitch, 0),                          # Right
+                (pitch/2, pitch * np.sqrt(3)/2),     # Upper-right
+                (-pitch/2, pitch * np.sqrt(3)/2),    # Upper-left
+                (-pitch, 0),                         # Left
+                (-pitch/2, -pitch * np.sqrt(3)/2),   # Lower-left
+                (pitch/2, -pitch * np.sqrt(3)/2),    # Lower-right
+            ]
+
+            for (x_pos, y_pos) in hex_positions:
+                hexagon = RegularPolygon(
+                    (x_pos, y_pos),
+                    numVertices=6,
+                    radius=hex_circumradius,
+                    orientation=0,
+                    fill=False,
+                    edgecolor='white',
+                    linewidth=2,
+                    linestyle='--',
+                    alpha=0.6
+                )
+                ax.add_patch(hexagon)
 
             ax.set_xlabel('X [cm]', fontsize=12, fontweight='bold')
             ax.set_ylabel('Y [cm]', fontsize=12, fontweight='bold')
@@ -535,6 +559,150 @@ def plot_sfr_tritium_assembly_heatmap(sp, output_dir='tally_figures'):
 
     plt.tight_layout(rect=[0, 0, 1, 0.97])
     output_file = output_path / 'sfr_tritium_assembly_heatmap.png'
+    plt.savefig(output_file, dpi=300, bbox_inches='tight')
+    print(f"  Saved: {output_file}")
+    plt.close()
+
+
+def plot_sfr_core_flux_heatmaps(sp, output_dir='tally_figures'):
+    """Plot 3x2 heatmap of axially-averaged flux across entire SFR core (5 flux types).
+
+    Parameters
+    ----------
+    sp : openmc.StatePoint
+        Loaded statepoint file
+    output_dir : str
+        Directory to save plots
+    """
+    output_path = Path(output_dir)
+
+    print("\nCreating SFR core flux heatmaps (axially averaged)...")
+
+    # Calculate normalization
+    power_mw = inputs['core_power']
+    norm_factor = calc_norm_factor(power_mw, sp)
+
+    # Get mesh tallies
+    try:
+        total_tally = sp.get_tally(name='sfr_core_mesh_total')
+        thermal_tally = sp.get_tally(name='sfr_core_mesh_thermal')
+        epithermal_tally = sp.get_tally(name='sfr_core_mesh_epithermal')
+        fast_tally = sp.get_tally(name='sfr_core_mesh_fast')
+        vfast_tally = sp.get_tally(name='sfr_core_mesh_veryfast')
+    except Exception as e:
+        print(f"  Warning: Could not find SFR core mesh tallies: {e}")
+        return
+
+    # Get mesh info
+    mesh_filter = total_tally.find_filter(openmc.MeshFilter)
+    mesh = mesh_filter.mesh
+    nx, ny, nz = mesh.dimension
+
+    # Calculate mesh volume
+    core_edge = inputs['sfr_core_edge'] + inputs['sfr_ss316_wall_thickness']
+    axial_height = inputs['sfr_axial_height'] + inputs['sfr_axial_reflector_thickness']
+
+    dx = 2 * core_edge / nx
+    dy = 2 * core_edge / ny
+    dz = 2 * axial_height / nz
+    mesh_volume = dx * dy * dz
+
+    # Reshape and normalize flux data
+    flux_total = total_tally.mean.reshape((nz, ny, nx)).transpose(2, 1, 0) * norm_factor / mesh_volume
+    flux_thermal = thermal_tally.mean.reshape((nz, ny, nx)).transpose(2, 1, 0) * norm_factor / mesh_volume
+    flux_epithermal = epithermal_tally.mean.reshape((nz, ny, nx)).transpose(2, 1, 0) * norm_factor / mesh_volume
+    flux_fast = fast_tally.mean.reshape((nz, ny, nx)).transpose(2, 1, 0) * norm_factor / mesh_volume
+    flux_vfast = vfast_tally.mean.reshape((nz, ny, nx)).transpose(2, 1, 0) * norm_factor / mesh_volume
+
+    # Average over Z axis (axially averaged)
+    flux_total_2d = np.mean(flux_total, axis=2)
+    flux_thermal_2d = np.mean(flux_thermal, axis=2)
+    flux_epithermal_2d = np.mean(flux_epithermal, axis=2)
+    flux_fast_2d = np.mean(flux_fast, axis=2)
+    flux_vfast_2d = np.mean(flux_vfast, axis=2)
+
+    # Create coordinate arrays
+    x_edges = np.linspace(-core_edge, core_edge, nx + 1)
+    y_edges = np.linspace(-core_edge, core_edge, ny + 1)
+
+    # Create 3x2 subplot
+    fig, axes = plt.subplots(3, 2, figsize=(16, 20))
+    fig.suptitle('SFR Core: Axially-Averaged Flux Distribution (4-Group)',
+                 fontsize=20, fontweight='bold')
+
+    # Plot data: 5 flux types
+    flux_data = [
+        ('Total Flux', flux_total_2d, axes[0, 0]),
+        ('Thermal Flux (0 - 0.625 eV)', flux_thermal_2d, axes[0, 1]),
+        ('Epithermal Flux (0.625 eV - 100 keV)', flux_epithermal_2d, axes[1, 0]),
+        ('Fast Flux (100 keV - 3 MeV)', flux_fast_2d, axes[1, 1]),
+        ('Very-Fast Flux (3 - 20 MeV)', flux_vfast_2d, axes[2, 0])
+    ]
+
+    for flux_name, flux_2d, ax in flux_data:
+        # Plot heatmap with log scale
+        flux_max = np.max(flux_2d[flux_2d > 0]) if np.any(flux_2d > 0) else 1.0
+        flux_min = flux_max * 1e-4  # 4 orders of magnitude dynamic range
+
+        if flux_max > 0:
+            im = ax.pcolormesh(x_edges, y_edges, flux_2d.T,  # Transpose for correct orientation
+                              cmap='hot',
+                              norm=plt.matplotlib.colors.LogNorm(vmin=flux_min, vmax=flux_max),
+                              shading='flat')
+
+            # Add boundary circles for radial regions
+            assembly_pitch = inputs['sfr_assembly_pitch']
+
+            # Inner fuel outer edge
+            r_inner_fuel = assembly_pitch * (inputs['sfr_inner_fuel_rings'] + 0.5)
+            circle1 = plt.Circle((0, 0), r_inner_fuel, fill=False,
+                                edgecolor='cyan', linewidth=2, linestyle='--', alpha=0.7,
+                                label='Inner Fuel')
+            ax.add_patch(circle1)
+
+            # Outer fuel outer edge
+            r_outer_fuel = assembly_pitch * (inputs['sfr_inner_fuel_rings'] + inputs['sfr_outer_fuel_rings'] + 0.5)
+            circle2 = plt.Circle((0, 0), r_outer_fuel, fill=False,
+                                edgecolor='lime', linewidth=2, linestyle='--', alpha=0.7,
+                                label='Outer Fuel')
+            ax.add_patch(circle2)
+
+            # Reflector edge
+            r_reflector = inputs['sfr_core_edge']
+            circle3 = plt.Circle((0, 0), r_reflector, fill=False,
+                                edgecolor='blue', linewidth=2, linestyle=':', alpha=0.7,
+                                label='Na Reflector')
+            ax.add_patch(circle3)
+
+            # SS316 wall edge
+            r_ss316 = r_reflector + inputs['sfr_ss316_wall_thickness']
+            circle4 = plt.Circle((0, 0), r_ss316, fill=False,
+                                edgecolor='white', linewidth=2.5, linestyle='-.', alpha=0.9,
+                                label='SS316 Wall')
+            ax.add_patch(circle4)
+
+            ax.set_xlabel('X [cm]', fontsize=12, fontweight='bold')
+            ax.set_ylabel('Y [cm]', fontsize=12, fontweight='bold')
+            ax.set_title(flux_name, fontsize=14, fontweight='bold')
+            ax.set_aspect('equal')
+            ax.set_xlim(-core_edge, core_edge)
+            ax.set_ylim(-core_edge, core_edge)
+
+            # Add legend only to first plot
+            if flux_name == 'Total Flux':
+                ax.legend(loc='upper right', fontsize=9, framealpha=0.8)
+
+            cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+            cbar.set_label('Flux [n/cm²/s]', fontsize=10)
+        else:
+            ax.text(0.5, 0.5, f'{flux_name}\nNo data', ha='center', va='center',
+                   transform=ax.transAxes, fontsize=14)
+
+    # Hide the empty subplot (2,1)
+    axes[2, 1].axis('off')
+
+    plt.tight_layout(rect=[0, 0, 1, 0.97])
+    output_file = output_path / 'sfr_core_flux_heatmaps.png'
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"  Saved: {output_file}")
     plt.close()
@@ -570,6 +738,7 @@ def plot_all_sfr_tallies(statepoint_path='simulation_raw/statepoint.250.h5', out
     # Generate all plots
     plot_sfr_tritium_breeder_tallies(sp, output_dir)
     plot_sfr_core_radial_flux(sp, output_dir)
+    plot_sfr_core_flux_heatmaps(sp, output_dir)
     plot_sfr_tritium_assembly_heatmap(sp, output_dir)
 
     print("\n" + "="*70)

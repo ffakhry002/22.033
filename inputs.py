@@ -11,7 +11,7 @@ inputs = {
     # Assembly type: 'candu', 'ap1000', or 'sodium'
     'assembly_type': 'sodium',  # Toggle between CANDU, AP1000, and Sodium Fast Reactor (SFR)
 
-    'core_power': 800.0,  # MW
+    'core_power': 3600.0,  # MW
 
     # CANDU Core Layout - 'C' = coolant, 'F' = fuel assembly, 'T_1' = tritium breeder
     # 24x24 grid with buffer row/column of 'C' on all sides
