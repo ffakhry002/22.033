@@ -32,12 +32,21 @@ def calc_norm_factor(power_mw, sp):
     - P is reactor power [MW]
     - 6.2415e18 is MeV/MW-s conversion
     - kappa is energy per fission [MeV] (fixed at 200 MeV)
-    - keff is from the simulation
+    - keff is from the simulation (or 1.2 for SFR normalization)
     - nu is calculated from tallies as (nu-fission)/(fission)
     """
+    from inputs import inputs
+
     # Use fixed value for energy per fission
     kappa_fission = 200.0  # MeV per fission
-    keff = sp.keff.nominal_value
+
+    # Use k-eff = 1.2 for SFR normalization (for consistent power normalization)
+    # Otherwise use actual k-eff from simulation
+    if inputs.get('assembly_type') == 'sodium':
+        keff = 1.2  # Fixed k-eff for SFR power normalization
+        print(f"\n  Using k-eff = 1.2 for SFR power normalization (actual k-eff = {sp.keff.nominal_value:.5f})")
+    else:
+        keff = sp.keff.nominal_value
 
     # Calculate nu from tallies
     nu_fission_tally = sp.get_tally(name='nu-fission')
