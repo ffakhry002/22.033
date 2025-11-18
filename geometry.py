@@ -850,72 +850,44 @@ def create_SFR_core(mat_dict):
     """
     derived = get_derived_dimensions()
 
-    # Create axial planes with reflectors
-    reflector_thickness = inputs['sfr_axial_reflector_thickness']
-    plane_bottom_reflector = openmc.ZPlane(
-        z0=-(inputs['sfr_axial_height'] + reflector_thickness),
+    # Create axial planes with VACUUM boundaries (matching reference benchmark)
+    # Reference has vacuum at ±50 cm with NO axial reflectors
+    plane_bottom = openmc.ZPlane(
+        z0=-inputs['sfr_axial_height'],
         boundary_type='vacuum'
     )
-    plane_fuel_bottom = openmc.ZPlane(z0=-inputs['sfr_axial_height'])
-    plane_fuel_top = openmc.ZPlane(z0=inputs['sfr_axial_height'])
-    plane_top_reflector = openmc.ZPlane(
-        z0=inputs['sfr_axial_height'] + reflector_thickness,
+    plane_top = openmc.ZPlane(
+        z0=inputs['sfr_axial_height'],
         boundary_type='vacuum'
     )
 
-    # Create hexagonal boundaries
-    # Inner boundary: core with sodium reflector
+    # Create hexagonal boundary with VACUUM at core edge (matching reference)
+    # Reference has NO radial SS316 wall - just vacuum at hex edge
     hex_core_boundary = openmc.model.HexagonalPrism(
         edge_length=inputs['sfr_core_edge'],
-        orientation='x'
-    )
-
-    # Outer boundary: SS316 wall
-    hex_ss316_boundary = openmc.model.HexagonalPrism(
-        edge_length=inputs['sfr_core_edge'] + inputs['sfr_ss316_wall_thickness'],
         orientation='x',
         boundary_type='vacuum'
     )
 
     # Build SFR fuel region with hexagonal lattice
+    # This is the ONLY cell - matching reference benchmark
     fuel_region_cell, tritium_info = build_SFR_core_lattice(
         mat_dict,
         hex_core_boundary,
-        plane_fuel_bottom,
-        plane_fuel_top
+        plane_bottom,
+        plane_top
     )
 
-    # Bottom axial reflector (SS316)
-    bottom_reflector_cell = openmc.Cell(name='sfr_bottom_reflector')
-    bottom_reflector_cell.region = -hex_ss316_boundary & +plane_bottom_reflector & -plane_fuel_bottom
-    bottom_reflector_cell.fill = mat_dict['ss316']
-
-    # Top axial reflector (SS316)
-    top_reflector_cell = openmc.Cell(name='sfr_top_reflector')
-    top_reflector_cell.region = -hex_ss316_boundary & +plane_fuel_top & -plane_top_reflector
-    top_reflector_cell.fill = mat_dict['ss316']
-
-    # Radial SS316 wall (surrounds core)
-    radial_ss316_wall = openmc.Cell(name='sfr_radial_ss316_wall')
-    radial_ss316_wall.region = +hex_core_boundary & -hex_ss316_boundary & +plane_fuel_bottom & -plane_fuel_top
-    radial_ss316_wall.fill = mat_dict['ss316']
-
-    # Create root universe and geometry
-    root_universe = openmc.Universe(cells=[
-        bottom_reflector_cell,
-        fuel_region_cell,
-        radial_ss316_wall,
-        top_reflector_cell
-    ])
+    # Create root universe with ONLY the fuel region (no SS316 reflectors)
+    # Reference benchmark has vacuum boundaries, not steel reflectors
+    root_universe = openmc.Universe(cells=[fuel_region_cell])
     geometry = openmc.Geometry(root_universe)
 
     # Store surfaces in dictionary for tallies
     surfaces_dict = {
         'hex_core_boundary': hex_core_boundary,
-        'plane_bottom_reflector': plane_bottom_reflector,
-        'plane_fuel_bottom': plane_fuel_bottom,
-        'plane_fuel_top': plane_fuel_top,
-        'plane_top_reflector': plane_top_reflector,
+        'plane_bottom': plane_bottom,
+        'plane_top': plane_top,
         'tritium_info': tritium_info
     }
 
