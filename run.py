@@ -50,17 +50,28 @@ def print_simulation_summary(sim_dir):
         norm_factor = calc_norm_factor(power_mw, sp)
 
         # Get tritium breeding tally from tritium breeder assembly
+        is_sfr = (inputs['assembly_type'] == 'sodium')
+
         try:
-            tbr_tally = sp.get_tally(name='tritium_breeder_production')
+            if is_sfr:
+                tbr_tally = sp.get_tally(name='sfr_tritium_production')
+                tally_source = "SFR Tritium Breeder"
+            else:
+                tbr_tally = sp.get_tally(name='tritium_breeder_production')
+                tally_source = "Tritium Breeder Assembly"
+
             tritium_per_source = tbr_tally.mean[0, 0, 0]  # T atoms/source neutron
             tritium_per_source_std = tbr_tally.std_dev[0, 0, 0]
-            tally_source = "Tritium Breeder Assembly"
         except:
             # Fallback: try old blanket tally if tritium breeder tally not found
-            tbr_tally = sp.get_tally(name='tritium_breeding_ratio')
-            tritium_per_source = tbr_tally.mean[0, 0, 0]  # T atoms/source neutron
-            tritium_per_source_std = tbr_tally.std_dev[0, 0, 0]
-            tally_source = "Lithium Blanket"
+            try:
+                tbr_tally = sp.get_tally(name='tritium_breeding_ratio')
+                tritium_per_source = tbr_tally.mean[0, 0, 0]  # T atoms/source neutron
+                tritium_per_source_std = tbr_tally.std_dev[0, 0, 0]
+                tally_source = "Lithium Blanket"
+            except:
+                print("  Warning: No tritium production tallies found")
+                return
 
         # Calculate absolute tritium production rate
         t_production = tritium_per_source * norm_factor  # T atoms/s
@@ -87,17 +98,27 @@ def print_simulation_summary(sim_dir):
 
         # Report surface currents if available
         try:
-            calandria_tally = sp.get_tally(name='tritium_calandria_outer_current_total')
-            calandria_current = calandria_tally.mean[0, 0, 0]
-            calandria_current_std = calandria_tally.std_dev[0, 0, 0]
+            if is_sfr:
+                # SFR: report cladding → breeder current
+                current_tally = sp.get_tally(name='sfr_tritium_current_total')
+                current_val = current_tally.mean[0, 0, 0]
+                current_std = current_tally.std_dev[0, 0, 0]
 
-            pt_tally = sp.get_tally(name='tritium_pt_inner_current_total')
-            pt_current = pt_tally.mean[0, 0, 0]
-            pt_current_std = pt_tally.std_dev[0, 0, 0]
+                print(f"\nSurface Currents (SFR Tritium Breeder):")
+                print(f"  Cladding → Breeder: {current_val:.6e} ± {current_std:.6e} n/source")
+            else:
+                # CANDU: report calandria and PT currents
+                calandria_tally = sp.get_tally(name='tritium_calandria_outer_current_total')
+                calandria_current = calandria_tally.mean[0, 0, 0]
+                calandria_current_std = calandria_tally.std_dev[0, 0, 0]
 
-            print(f"\nSurface Currents (Tritium Breeder Assembly):")
-            print(f"  Calandria Outer (from moderator): {calandria_current:.6e} ± {calandria_current_std:.6e} n/source")
-            print(f"  Pressure Tube Inner (from PT):    {pt_current:.6e} ± {pt_current_std:.6e} n/source")
+                pt_tally = sp.get_tally(name='tritium_pt_inner_current_total')
+                pt_current = pt_tally.mean[0, 0, 0]
+                pt_current_std = pt_tally.std_dev[0, 0, 0]
+
+                print(f"\nSurface Currents (Tritium Breeder Assembly):")
+                print(f"  Calandria Outer (from moderator): {calandria_current:.6e} ± {calandria_current_std:.6e} n/source")
+                print(f"  Pressure Tube Inner (from PT):    {pt_current:.6e} ± {pt_current_std:.6e} n/source")
         except:
             pass  # Surface tallies not available
 

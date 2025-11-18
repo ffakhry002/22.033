@@ -491,10 +491,12 @@ def create_all_tallies(geometry, surfaces_dict):
     all_tallies = openmc.Tallies()
 
     # Create energy filters ONCE to avoid ID duplication
+    # Include 4th group (very_fast: 10-20 MeV) for SFR
     energy_filters = {
         'thermal': openmc.EnergyFilter([0.0, inputs['thermal_cutoff']]),
         'epithermal': openmc.EnergyFilter([inputs['thermal_cutoff'], inputs['epithermal_cutoff']]),
         'fast': openmc.EnergyFilter([inputs['epithermal_cutoff'], inputs['fast_cutoff']]),
+        'very_fast': openmc.EnergyFilter([inputs['fast_cutoff'], 20.0e6]),  # 10-20 MeV
         'log_1001': openmc.EnergyFilter(inputs['log_1001_bins'])
     }
 
@@ -502,25 +504,54 @@ def create_all_tallies(geometry, surfaces_dict):
     norm_tallies = create_normalization_tallies()
     all_tallies.extend(norm_tallies)
 
-    # 2. Tritium breeder surface tallies
-    surface_tallies = create_tritium_breeder_surface_tallies(geometry, surfaces_dict, energy_filters)
-    all_tallies.extend(surface_tallies)
+    # Check if this is an SFR geometry
+    is_sfr = (inputs['assembly_type'] == 'sodium')
 
-    # 3. Tritium breeding tallies
-    tbr_tallies = create_tritium_breeding_tally(geometry, surfaces_dict)
-    all_tallies.extend(tbr_tallies)
+    if is_sfr:
+        print("\n" + "="*60)
+        print("Creating SFR-specific tallies...")
+        print("="*60)
 
-    # 4. Tritium breeder flux tallies
-    flux_tallies = create_tritium_breeder_flux_tallies(geometry, surfaces_dict, energy_filters)
-    all_tallies.extend(flux_tallies)
+        # Import SFR tally functions
+        from tallies_sfr import (
+            create_sfr_tritium_breeder_tallies,
+            create_sfr_core_mesh_tallies,
+            create_sfr_tritium_assembly_mesh
+        )
 
-    # 5. Core mesh tallies (for radial plots)
-    core_mesh_tallies = create_core_mesh_tallies(energy_filters)
-    all_tallies.extend(core_mesh_tallies)
+        # 2. SFR Tritium breeder tallies (surface + flux + production)
+        sfr_tallies = create_sfr_tritium_breeder_tallies(geometry, surfaces_dict, energy_filters)
+        all_tallies.extend(sfr_tallies)
 
-    # 6. Tritium assembly mesh tally (3x3 assembly heatmap)
-    assembly_mesh_tallies = create_tritium_assembly_mesh_tally(energy_filters)
-    all_tallies.extend(assembly_mesh_tallies)
+        # 3. SFR Core mesh tallies (4-group)
+        sfr_mesh_tallies = create_sfr_core_mesh_tallies(energy_filters)
+        all_tallies.extend(sfr_mesh_tallies)
+
+        # 4. SFR Tritium assembly mesh (3x3 heatmap)
+        sfr_assembly_mesh = create_sfr_tritium_assembly_mesh(energy_filters)
+        all_tallies.extend(sfr_assembly_mesh)
+
+    else:
+        # Standard CANDU/AP1000 tallies
+        # 2. Tritium breeder surface tallies
+        surface_tallies = create_tritium_breeder_surface_tallies(geometry, surfaces_dict, energy_filters)
+        all_tallies.extend(surface_tallies)
+
+        # 3. Tritium breeding tallies
+        tbr_tallies = create_tritium_breeding_tally(geometry, surfaces_dict)
+        all_tallies.extend(tbr_tallies)
+
+        # 4. Tritium breeder flux tallies
+        flux_tallies = create_tritium_breeder_flux_tallies(geometry, surfaces_dict, energy_filters)
+        all_tallies.extend(flux_tallies)
+
+        # 5. Core mesh tallies (for radial plots)
+        core_mesh_tallies = create_core_mesh_tallies(energy_filters)
+        all_tallies.extend(core_mesh_tallies)
+
+        # 6. Tritium assembly mesh tally (3x3 assembly heatmap)
+        assembly_mesh_tallies = create_tritium_assembly_mesh_tally(energy_filters)
+        all_tallies.extend(assembly_mesh_tallies)
 
     print("\n" + "="*60)
     print(f"Total tallies created: {len(all_tallies)}")

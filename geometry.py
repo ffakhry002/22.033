@@ -42,6 +42,12 @@ MATERIAL_COLORS = {
     # Tritium breeder assembly materials
     'ti_grade7': 'purple',
     'vacuum_gap': 'lavender',
+    # SFR materials
+    'sodium': 'lightblue',
+    'ss316': 'silver',
+    'mox_inner': 'darkorange',
+    'mox_outer': 'orange',
+    'sfr_clad': 'goldenrod',
 }
 
 def CANDU_pin(mat_dict, fuel_mat_name):
@@ -377,6 +383,334 @@ def BEAVRS_assembly(mat_dict):
     return assembly_universe
 
 
+def SFR_pin(mat_dict, fuel_mat_name):
+    """Create a Sodium Fast Reactor fuel pin cell universe.
+
+    Parameters
+    ----------
+    mat_dict : dict
+        Dictionary of materials
+    fuel_mat_name : str
+        Name of fuel material ('mox_inner' or 'mox_outer')
+
+    Returns
+    -------
+    pin_universe : openmc.Universe
+        The fuel pin universe
+    """
+    # Create surfaces
+    fuel_surface = openmc.ZCylinder(r=inputs['sfr_fuel_or'])
+    gap_outer_surface = openmc.ZCylinder(r=inputs['sfr_gap_or'])
+    clad_surface = openmc.ZCylinder(r=inputs['sfr_clad_or'])
+
+    # Create cells
+    fuel_cell = openmc.Cell(name='sfr_fuel', fill=mat_dict[fuel_mat_name])
+    fuel_cell.region = -fuel_surface
+
+    gap_cell = openmc.Cell(name='sfr_gap', fill=mat_dict['sodium'])
+    gap_cell.region = +fuel_surface & -gap_outer_surface
+
+    clad_cell = openmc.Cell(name='sfr_cladding', fill=mat_dict['sfr_clad'])
+    clad_cell.region = +gap_outer_surface & -clad_surface
+
+    sodium_cell = openmc.Cell(name='sfr_sodium', fill=mat_dict['sodium'])
+    sodium_cell.region = +clad_surface
+
+    pin_universe = openmc.Universe(name='sfr_pin', cells=[fuel_cell, gap_cell, clad_cell, sodium_cell])
+    return pin_universe
+
+
+def SFR_assembly(mat_dict, fuel_mat_name):
+    """Create a Sodium Fast Reactor hexagonal assembly with mixed fuel rings.
+
+    Parameters
+    ----------
+    mat_dict : dict
+        Dictionary of materials
+    fuel_mat_name : str
+        Name of fuel material ('mox_inner' or 'mox_outer')
+
+    Returns
+    -------
+    assembly_universe : openmc.Universe
+        The complete assembly universe
+    """
+    # Create sodium-only universe for outer region
+    sodium_mod_cell = openmc.Cell(fill=mat_dict['sodium'])
+    sodium_mod_u = openmc.Universe(cells=(sodium_mod_cell,))
+
+    # Create hexagonal lattice
+    assembly_lattice = openmc.HexLattice(name='sfr_assembly_lattice')
+    assembly_lattice.center = (0., 0.)
+    assembly_lattice.pitch = (inputs['sfr_pin_pitch'],)
+    assembly_lattice.orientation = 'x'
+    assembly_lattice.outer = sodium_mod_u
+
+    # Create rings - all pins in an assembly use the SAME fuel type
+    # (like the notebook: inner assemblies are uniform inner, outer assemblies are uniform outer)
+    pins_per_ring = inputs['sfr_pins_per_ring']  # [48, 42, 36, 30, 24, 18, 12, 6, 1]
+    lattice_rings = []
+
+    # Create fuel pin with specified fuel type (uniform throughout assembly)
+    fuel_pin = SFR_pin(mat_dict, fuel_mat_name)
+
+    for num_pins in pins_per_ring:
+        lattice_rings.append([fuel_pin] * num_pins)
+
+    assembly_lattice.universes = lattice_rings
+
+    # Create hexagonal prism boundary - defines the assembly boundary
+    hex_boundary = openmc.model.HexagonalPrism(edge_length=inputs['sfr_assembly_edge'], orientation='x')
+
+    # Create main assembly cell (lattice inside hex boundary)
+    main_assembly = openmc.Cell(fill=assembly_lattice, region=-hex_boundary)
+
+    # Create outer sodium cell (fills space outside hex boundary, between assemblies)
+    outer_sodium_cell = openmc.Cell(fill=mat_dict['sodium'])
+    # Don't specify region - it will fill everything not already defined
+
+    # Create universe
+    assembly_universe = openmc.Universe(cells=[main_assembly, outer_sodium_cell])
+
+    return assembly_universe
+
+
+def SFR_reflector_assembly(mat_dict):
+    """Create a Sodium Fast Reactor reflector assembly (sodium-filled).
+
+    Parameters
+    ----------
+    mat_dict : dict
+        Dictionary of materials
+
+    Returns
+    -------
+    reflector_universe : openmc.Universe
+        The reflector assembly universe
+    """
+    # Create hexagonal prism boundary for sodium reflector
+    hex_boundary = openmc.model.HexagonalPrism(
+        edge_length=inputs['sfr_assembly_edge'],
+        orientation='x'
+    )
+
+    # Create sodium reflector cell (fills entire assembly)
+    ref_cell = openmc.Cell(fill=mat_dict['sodium'], region=-hex_boundary)
+
+    # Create outer sodium cell (fills space outside hex boundary, between assemblies)
+    outer_sodium_cell = openmc.Cell(fill=mat_dict['sodium'])
+    # Don't specify region - it will fill everything not already defined
+
+    # Create universe
+    reflector_universe = openmc.Universe(cells=[ref_cell, outer_sodium_cell])
+
+    return reflector_universe
+
+
+def SFR_tritium_breeder_assembly(mat_dict):
+    """Create a tritium breeding assembly with hexagonal shape for SFR.
+
+    Uses:
+    - Hexagonal breeder region (not cylindrical)
+    - 7 cooling loops: 1 center + 6 aligned with hex corners at 2/3 distance
+    - Hexagonal cladding around breeder
+    - Filled with breeder material
+
+    Returns
+    -------
+    root_universe : openmc.Universe
+        The complete tritium breeder assembly universe
+    cells_dict : dict
+        Dictionary of key cells for tally creation
+    surfaces_dict : dict
+        Dictionary of key surfaces for tally creation
+    """
+    from math import pi, cos, sin, sqrt
+
+    # Assembly hex boundary
+    hex_edge = inputs['sfr_tritium_breeder_edge']
+    hex_assembly_boundary = openmc.model.HexagonalPrism(edge_length=hex_edge, orientation='x')
+
+    # Cladding thickness = 1 cm
+    cladding_thickness = 1.0  # cm
+
+    # Inner hexagonal breeder region (assembly size minus cladding)
+    breeder_hex_edge = hex_edge - cladding_thickness
+    hex_breeder_inner = openmc.model.HexagonalPrism(edge_length=breeder_hex_edge, orientation='x')
+
+    # Outer hexagonal cladding boundary (same as assembly boundary)
+    hex_breeder_outer = openmc.model.HexagonalPrism(edge_length=hex_edge, orientation='x')
+
+    # Coolant tube dimensions: outer radius = 1.25 cm
+    coolant_tube_or = 1.25  # cm
+    coolant_tube_wall_thickness = 0.15  # cm (12% of tube radius)
+    coolant_tube_ir = coolant_tube_or - coolant_tube_wall_thickness
+
+    # 7 cooling loop positions: 1 center + 6 at hex corners (2/3 distance)
+    # Hexagon corners at 60° intervals
+    # Inscribed circle radius of breeder hexagon
+    hex_inscribed_radius = breeder_hex_edge * sqrt(3) / 2
+    two_thirds_dist = hex_inscribed_radius * (2.0 / 3.0)
+    coolant_positions = [(0.0, 0.0)]  # Center
+
+    # 6 positions aligned with hex corners
+    for i in range(6):
+        angle = i * pi / 3.0  # 0°, 60°, 120°, 180°, 240°, 300°
+        x = two_thirds_dist * cos(angle)
+        y = two_thirds_dist * sin(angle)
+        coolant_positions.append((x, y))
+
+    # Select breeder material
+    breeder_material = inputs['breeder_material']
+    breeder_mat = mat_dict[breeder_material]
+
+    # Create breeder region (will exclude coolant tubes)
+    breeder_region = -hex_breeder_inner
+
+    # Create coolant tubes and exclude from breeder region
+    tube_cells = []
+    for i, (x, y) in enumerate(coolant_positions):
+        tube_outer_surf = openmc.ZCylinder(x0=x, y0=y, r=coolant_tube_or)
+        tube_inner_surf = openmc.ZCylinder(x0=x, y0=y, r=coolant_tube_ir)
+
+        # Exclude from breeder region
+        breeder_region &= +tube_outer_surf
+
+        # Coolant inside - use sodium for SFR
+        coolant_inner = openmc.Cell(
+            name='sfr_tritium_coolant_inner',
+            fill=mat_dict['sodium'],
+            region=-tube_inner_surf
+        )
+        # Ti-0.2Pd wall
+        tube_wall = openmc.Cell(
+            name='sfr_tritium_coolant_wall',
+            fill=mat_dict['ti_grade7'],
+            region=+tube_inner_surf & -tube_outer_surf
+        )
+
+        tube_cells.extend([coolant_inner, tube_wall])
+
+    # Create breeder cell (hexagonal, with cooling tubes excluded)
+    breeder_cell = openmc.Cell(
+        name='sfr_tritium_breeder_material',
+        fill=breeder_mat,
+        region=breeder_region
+    )
+
+    # Create universe containing breeder and coolant tubes
+    breeder_universe = openmc.Universe(cells=[breeder_cell] + tube_cells)
+
+    # Main assembly cells
+    # 1. Breeder bundle (hexagonal)
+    bundle = openmc.Cell(
+        name='sfr_tritium_bundle',
+        fill=breeder_universe,
+        region=-hex_breeder_inner & -hex_assembly_boundary
+    )
+
+    # 2. Hexagonal cladding (Ti-0.2Pd) - fills space between breeder and assembly boundary
+    cladding_cell = openmc.Cell(
+        name='sfr_tritium_cladding',
+        fill=mat_dict['ti_grade7'],
+        region=+hex_breeder_inner & -hex_assembly_boundary
+    )
+
+    # 4. Outer sodium cell (fills space outside hex boundary, between assemblies)
+    outer_sodium_cell = openmc.Cell(
+        name='sfr_tritium_outer_sodium',
+        fill=mat_dict['sodium']
+    )
+
+    root_universe = openmc.Universe(cells=[bundle, cladding_cell, outer_sodium_cell])
+
+    # Return universe and key cells/surfaces for tallies
+    cells_dict = {
+        'bundle': bundle,
+        'cladding': cladding_cell
+    }
+
+    surfaces_dict = {
+        'hex_breeder_inner': hex_breeder_inner,
+        'hex_breeder_outer': hex_breeder_outer,
+        'hex_assembly_boundary': hex_assembly_boundary
+    }
+
+    return root_universe, cells_dict, surfaces_dict
+
+
+def build_SFR_core_lattice(mat_dict, hex_boundary, plane_bottom, plane_top):
+    """Build a hexagonal SFR core lattice.
+
+    Returns
+    -------
+    lattice_cell : openmc.Cell
+        Cell containing the SFR hexagonal core lattice
+    tritium_info : dict or None
+        Dictionary with tritium breeder assembly info if present
+    """
+    # Create assembly types
+    inner_fuel = SFR_assembly(mat_dict, 'mox_inner')
+    outer_fuel = SFR_assembly(mat_dict, 'mox_outer')
+    reflector = SFR_reflector_assembly(mat_dict)
+
+    # Create sodium-only universe for outer region
+    sodium_mod_cell = openmc.Cell(fill=mat_dict['sodium'])
+    sodium_mod_u = openmc.Universe(cells=(sodium_mod_cell,))
+
+    # Create tritium breeder assembly for center
+    tritium_assembly, tritium_cells, tritium_surfaces = SFR_tritium_breeder_assembly(mat_dict)
+    tritium_info = {
+        'cells_dict': tritium_cells,
+        'surfaces_dict': tritium_surfaces
+    }
+
+    # Create hexagonal core lattice
+    core_lattice = openmc.HexLattice(name='sfr_core')
+    core_lattice.center = (0., 0.)
+    core_lattice.pitch = (inputs['sfr_assembly_pitch'],)
+    core_lattice.outer = sodium_mod_u
+    core_lattice.orientation = 'x'
+
+    # Build ring structure based on inputs
+    # Rings from outside to inside: reflector -> outer fuel -> inner fuel -> center (tritium)
+    n_reflector = inputs['sfr_reflector_rings']
+    n_outer_fuel = inputs['sfr_outer_fuel_rings']
+    n_inner_fuel = inputs['sfr_inner_fuel_rings']
+
+    lattice_rings = []
+
+    # Reflector rings (outermost)
+    for ring_idx in range(n_reflector):
+        ring_number = n_reflector + n_outer_fuel + n_inner_fuel - ring_idx
+        n_assemblies = 6 * ring_number
+        lattice_rings.append([reflector] * n_assemblies)
+
+    # Outer fuel rings
+    for ring_idx in range(n_outer_fuel):
+        ring_number = n_outer_fuel + n_inner_fuel - ring_idx
+        n_assemblies = 6 * ring_number
+        lattice_rings.append([outer_fuel] * n_assemblies)
+
+    # Inner fuel rings
+    for ring_idx in range(n_inner_fuel):
+        ring_number = n_inner_fuel - ring_idx
+        n_assemblies = 6 * ring_number
+        lattice_rings.append([inner_fuel] * n_assemblies)
+
+    # Center assembly (tritium breeder)
+    lattice_rings.append([tritium_assembly])
+
+    core_lattice.universes = lattice_rings
+
+    # Create lattice cell with hexagonal boundary
+    lattice_cell = openmc.Cell(name='sfr_core_region')
+    lattice_cell.region = -hex_boundary & +plane_bottom & -plane_top
+    lattice_cell.fill = core_lattice
+
+    return lattice_cell, tritium_info
+
+
 def build_core_lattice(mat_dict, cyl_core, plane_bottom, plane_top):
     """Build a lattice of assemblies based on core_lattice from inputs.
 
@@ -455,6 +789,90 @@ def build_core_lattice(mat_dict, cyl_core, plane_bottom, plane_top):
     return lattice_cell, tritium_info
 
 
+def create_SFR_core(mat_dict):
+    """Create the full SFR core geometry with hexagonal layout and SS316 reflector.
+
+    Returns
+    -------
+    geometry : openmc.Geometry
+        The complete SFR reactor geometry
+    surfaces_dict : dict
+        Dictionary of surfaces for use in tallies
+    """
+    derived = get_derived_dimensions()
+
+    # Create axial planes with reflectors
+    reflector_thickness = inputs['sfr_axial_reflector_thickness']
+    plane_bottom_reflector = openmc.ZPlane(
+        z0=-(inputs['sfr_axial_height'] + reflector_thickness),
+        boundary_type='vacuum'
+    )
+    plane_fuel_bottom = openmc.ZPlane(z0=-inputs['sfr_axial_height'])
+    plane_fuel_top = openmc.ZPlane(z0=inputs['sfr_axial_height'])
+    plane_top_reflector = openmc.ZPlane(
+        z0=inputs['sfr_axial_height'] + reflector_thickness,
+        boundary_type='vacuum'
+    )
+
+    # Create hexagonal boundaries
+    # Inner boundary: core with sodium reflector
+    hex_core_boundary = openmc.model.HexagonalPrism(
+        edge_length=inputs['sfr_core_edge'],
+        orientation='x'
+    )
+
+    # Outer boundary: SS316 wall
+    hex_ss316_boundary = openmc.model.HexagonalPrism(
+        edge_length=inputs['sfr_core_edge'] + inputs['sfr_ss316_wall_thickness'],
+        orientation='x',
+        boundary_type='vacuum'
+    )
+
+    # Build SFR fuel region with hexagonal lattice
+    fuel_region_cell, tritium_info = build_SFR_core_lattice(
+        mat_dict,
+        hex_core_boundary,
+        plane_fuel_bottom,
+        plane_fuel_top
+    )
+
+    # Bottom axial reflector (SS316)
+    bottom_reflector_cell = openmc.Cell(name='sfr_bottom_reflector')
+    bottom_reflector_cell.region = -hex_ss316_boundary & +plane_bottom_reflector & -plane_fuel_bottom
+    bottom_reflector_cell.fill = mat_dict['ss316']
+
+    # Top axial reflector (SS316)
+    top_reflector_cell = openmc.Cell(name='sfr_top_reflector')
+    top_reflector_cell.region = -hex_ss316_boundary & +plane_fuel_top & -plane_top_reflector
+    top_reflector_cell.fill = mat_dict['ss316']
+
+    # Radial SS316 wall (surrounds core)
+    radial_ss316_wall = openmc.Cell(name='sfr_radial_ss316_wall')
+    radial_ss316_wall.region = +hex_core_boundary & -hex_ss316_boundary & +plane_fuel_bottom & -plane_fuel_top
+    radial_ss316_wall.fill = mat_dict['ss316']
+
+    # Create root universe and geometry
+    root_universe = openmc.Universe(cells=[
+        bottom_reflector_cell,
+        fuel_region_cell,
+        radial_ss316_wall,
+        top_reflector_cell
+    ])
+    geometry = openmc.Geometry(root_universe)
+
+    # Store surfaces in dictionary for tallies
+    surfaces_dict = {
+        'hex_core_boundary': hex_core_boundary,
+        'plane_bottom_reflector': plane_bottom_reflector,
+        'plane_fuel_bottom': plane_fuel_bottom,
+        'plane_fuel_top': plane_fuel_top,
+        'plane_top_reflector': plane_top_reflector,
+        'tritium_info': tritium_info
+    }
+
+    return geometry, surfaces_dict
+
+
 def create_core(mat_dict):
     """Create the full core geometry with reflectors and containment.
 
@@ -466,6 +884,10 @@ def create_core(mat_dict):
         Dictionary of cylindrical surfaces for use in tallies
     """
     derived = get_derived_dimensions()
+
+    # Check if this is an SFR geometry
+    if inputs['assembly_type'] == 'sodium':
+        return create_SFR_core(mat_dict)
 
     # Select breeder material based on configuration
     valid_materials = [
@@ -619,17 +1041,25 @@ if __name__ == '__main__':
         # For CANDU, create a pin from the first ring
         pin_universe = CANDU_pin(mat_dict, 'candu_fuel_central')
         assembly_universe = CANDU_assembly(mat_dict)
+    elif inputs['assembly_type'] == 'sodium':
+        # For SFR, create MOX fuel pin and assembly
+        pin_universe = SFR_pin(mat_dict, 'mox_inner')
+        assembly_universe = SFR_assembly(mat_dict, 'mox_inner')
     else:
         pin_universe = BEAVRS_pin(mat_dict)
         assembly_universe = BEAVRS_assembly(mat_dict)
 
     # Check if we have tritium assemblies in lattice
-    core_lattice = inputs['candu_lattice'] if inputs['assembly_type'] == 'candu' else inputs['ap1000_lattice']
-    has_tritium = any('T' in str(symbol) for row in core_lattice for symbol in row)
-
-    # Create tritium breeder assembly only if present in lattice
-    if has_tritium:
-        tritium_universe, _, _ = tritium_breeder_assembly(mat_dict)
+    if inputs['assembly_type'] == 'sodium':
+        # SFR always has tritium breeder in center
+        has_tritium = True
+        tritium_universe, _, _ = SFR_tritium_breeder_assembly(mat_dict)
+    else:
+        core_lattice = inputs['candu_lattice'] if inputs['assembly_type'] == 'candu' else inputs['ap1000_lattice']
+        has_tritium = any('T' in str(symbol) for row in core_lattice for symbol in row)
+        # Create tritium breeder assembly only if present in lattice
+        if has_tritium:
+            tritium_universe, _, _ = tritium_breeder_assembly(mat_dict)
 
     core_geometry, surfaces_dict = create_core(mat_dict)
 
@@ -659,10 +1089,13 @@ if __name__ == '__main__':
 
     # Plot assembly
     print("Plotting assembly...")
-    # Use larger width for CANDU assemblies
+    # Use appropriate width based on assembly type
     if inputs['assembly_type'] == 'candu':
         assembly_width = 2 * inputs['candu_moderator_or']  # ~28.6 cm
         plot_width = (assembly_width * 1.2, assembly_width * 1.2)  # Add some margin
+    elif inputs['assembly_type'] == 'sodium':
+        assembly_width = 2 * inputs['sfr_assembly_edge']  # Hexagonal diameter
+        plot_width = (assembly_width * 1.2, assembly_width * 1.2)
     else:
         plot_width = (25.0, 25.0)
 
@@ -695,13 +1128,24 @@ if __name__ == '__main__':
 
     # Plot core XY
     print("Plotting core XY...")
-    # Auto-adjust width based on lithium wall radius (add some margin)
-    r_max = derived['r_lithium_wall']
-    core_xy_width = 2 * r_max * 1.1  # Add 10% margin
+    # Auto-adjust width based on assembly type
+    if inputs['assembly_type'] == 'sodium':
+        # For SFR, use hex core edge
+        core_xy_width = 2 * inputs['sfr_core_edge'] * 1.2  # Add 20% margin for hex
+    else:
+        # For cylindrical cores, use lithium wall radius
+        r_max = derived['r_lithium_wall']
+        core_xy_width = 2 * r_max * 1.1  # Add 10% margin
+
+    # Calculate origin z-coordinate based on assembly type
+    if inputs['assembly_type'] == 'sodium':
+        origin_z = 0.0  # SFR is centered at z=0
+    else:
+        origin_z = derived['z_fuel_bottom'] + inputs['fuel_height']/2
 
     core_xy_params = {
         'basis': 'xy',
-        'origin': (0, 0, derived['z_fuel_bottom'] + inputs['fuel_height']/2),
+        'origin': (0, 0, origin_z),
         'width': (core_xy_width, core_xy_width),
         'pixels': inputs['plot_pixels'],
         'color_by': 'material',
@@ -714,49 +1158,60 @@ if __name__ == '__main__':
 
     # Plot core XZ
     print("Plotting core XZ...")
-    # Calculate x and y coordinates to slice through middle of a fuel assembly
-    # Select appropriate lattice based on assembly type
-    if inputs['assembly_type'] == 'candu':
-        core_lattice = inputs['candu_lattice']
+
+    if inputs['assembly_type'] == 'sodium':
+        # For SFR, slice through center (tritium breeder)
+        x_slice = 0.0
+        y_slice = 0.0
+        core_xz_width = 2 * inputs['sfr_core_edge'] * 1.2
+        z_center = 0.0
+        z_height = inputs['sfr_axial_height'] * 2 * 1.1
     else:
-        core_lattice = inputs['ap1000_lattice']
+        # Calculate x and y coordinates to slice through middle of a fuel assembly
+        # Select appropriate lattice based on assembly type
+        if inputs['assembly_type'] == 'candu':
+            core_lattice = inputs['candu_lattice']
+        else:
+            core_lattice = inputs['ap1000_lattice']
 
-    n_rows = len(core_lattice)
-    n_cols = len(core_lattice[0])
+        n_rows = len(core_lattice)
+        n_cols = len(core_lattice[0])
 
-    # Find center of a fuel assembly in the lattice
-    # Look for a fuel assembly closest to the center (0, 0)
-    fuel_assembly_pos = None
-    min_distance = float('inf')
+        # Find center of a fuel assembly in the lattice
+        # Look for a fuel assembly closest to the center (0, 0)
+        fuel_assembly_pos = None
+        min_distance = float('inf')
 
-    for row_idx, row in enumerate(core_lattice):
-        for col_idx, symbol in enumerate(row):
-            if symbol == 'F':
-                # Calculate center position of this assembly
-                x_center = (col_idx - n_cols/2 + 0.5) * derived['assembly_width']
-                y_center = (row_idx - n_rows/2 + 0.5) * derived['assembly_width']
-                # Calculate distance from center
-                distance = (x_center**2 + y_center**2)**0.5
-                # Keep the assembly closest to center
-                if distance < min_distance:
-                    min_distance = distance
-                    fuel_assembly_pos = (x_center, y_center)
+        for row_idx, row in enumerate(core_lattice):
+            for col_idx, symbol in enumerate(row):
+                if symbol == 'F':
+                    # Calculate center position of this assembly
+                    x_center = (col_idx - n_cols/2 + 0.5) * derived['assembly_width']
+                    y_center = (row_idx - n_rows/2 + 0.5) * derived['assembly_width']
+                    # Calculate distance from center
+                    distance = (x_center**2 + y_center**2)**0.5
+                    # Keep the assembly closest to center
+                    if distance < min_distance:
+                        min_distance = distance
+                        fuel_assembly_pos = (x_center, y_center)
 
-    # Default to (0, 0) if no fuel assembly found or for CANDU (which is centered)
-    if fuel_assembly_pos is None or inputs['assembly_type'] == 'candu':
-        x_slice = 0.0  # Center of CANDU assembly
-        y_slice = 0.0  # Center of CANDU assembly
-    else:
-        x_slice = fuel_assembly_pos[0]  # X-coordinate of assembly center
-        y_slice = fuel_assembly_pos[1]  # Y-coordinate to slice through assembly center
+        # Default to (0, 0) if no fuel assembly found or for CANDU (which is centered)
+        if fuel_assembly_pos is None or inputs['assembly_type'] == 'candu':
+            x_slice = 0.0  # Center of CANDU assembly
+            y_slice = 0.0  # Center of CANDU assembly
+        else:
+            x_slice = fuel_assembly_pos[0]  # X-coordinate of assembly center
+            y_slice = fuel_assembly_pos[1]  # Y-coordinate to slice through assembly center
 
-    # Auto-adjust width based on lithium wall radius
-    core_xz_width = 2 * r_max * 1.1  # Add 10% margin
+        # Auto-adjust width based on lithium wall radius
+        core_xz_width = 2 * r_max * 1.1  # Add 10% margin
+        z_center = derived['z_top']/2
+        z_height = derived['z_top']*1.1
 
     core_xz_params = {
         'basis': 'xz',
-        'origin': (x_slice, y_slice, derived['z_top']/2),
-        'width': (core_xz_width, derived['z_top']*1.1),
+        'origin': (x_slice, y_slice, z_center),
+        'width': (core_xz_width, z_height),
         'pixels': inputs['plot_pixels'],
         'color_by': 'material',
         'colors': mat_colors

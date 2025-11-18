@@ -8,8 +8,8 @@ inputs = {
     ###########################################
     # Core Configuration
     ###########################################
-    # Assembly type: 'candu' or 'ap1000'
-    'assembly_type': 'candu',  # Toggle between CANDU and AP1000 assembly
+    # Assembly type: 'candu', 'ap1000', or 'sodium'
+    'assembly_type': 'sodium',  # Toggle between CANDU, AP1000, and Sodium Fast Reactor (SFR)
 
     'core_power': 800.0,  # MW
 
@@ -116,6 +116,46 @@ inputs = {
     'candu_U238_fraction': 0.99289,     # Atomic fraction
 
     ###########################################
+    # Sodium Fast Reactor (SFR) Configuration
+    ###########################################
+    # SFR temperatures (K)
+    'sfr_T_fuel': 900.0,         # Fuel temperature
+    'sfr_T_clad': 700.0,         # Cladding temperature
+    'sfr_T_sodium': 700.0,       # Sodium coolant temperature
+
+    # SFR fuel pin dimensions (cm)
+    'sfr_fuel_or': 0.943/2,      # Fuel outer radius (0.4715 cm)
+    'sfr_gap_ir': 0.943/2,       # Gap inner radius
+    'sfr_gap_or': 0.973/2,       # Gap outer radius (0.4865 cm)
+    'sfr_clad_ir': 0.973/2,      # Cladding inner radius
+    'sfr_clad_or': 1.073/2,      # Cladding outer radius (0.5365 cm)
+
+    # SFR pin assembly geometry (hexagonal)
+    'sfr_pin_pitch': 21.08/17,   # Pin pitch in cm (~1.24 cm)
+    'sfr_pins_per_ring': [48, 42, 36, 30, 24, 18, 12, 6, 1],  # Number of pins per ring
+    'sfr_assembly_edge': 12.1705,  # Assembly hexagonal edge length (cm)
+
+    # SFR core lattice (hexagonal rings)
+    # Number of assemblies per ring: [96, 90, 84, ...] for reflector, outer fuel, inner fuel
+    'sfr_reflector_rings': 3,     # Number of reflector rings (outermost)
+    'sfr_outer_fuel_rings': 3,    # Number of outer fuel rings
+    'sfr_inner_fuel_rings': 9,    # Number of inner fuel rings
+
+    # SFR assembly pitch (distance between assembly centers)
+    'sfr_assembly_pitch': 21.08,  # cm
+
+    # SFR core outer boundary
+    'sfr_core_edge': 347.82,      # Hexagonal edge length of entire core (cm)
+    'sfr_ss316_wall_thickness': 20.0,  # SS316 wall thickness outside core (cm)
+
+    # SFR axial dimensions (cm)
+    'sfr_axial_height': 100.0,    # Active fuel height (half-core from z=0)
+    'sfr_axial_reflector_thickness': 30.0,  # Axial reflector thickness (top and bottom, SS316)
+
+    # SFR tritium breeder (scaled to fit in hexagonal assembly)
+    'sfr_tritium_breeder_edge': 12.1705,  # Hexagonal edge for tritium assembly (same as fuel assembly to fill hexagon)
+
+    ###########################################
     # Radial Geometry (all in cm)
     ###########################################
     'r_core': 340,            # Core radius (fuel + outer coolant)
@@ -162,7 +202,8 @@ inputs = {
     # Energy group definitions (eV)
     'thermal_cutoff': 0.625,    # Thermal/epithermal boundary
     'epithermal_cutoff': 100e3, # Epithermal/fast boundary (100 keV)
-    'fast_cutoff': 10e6,        # Fast upper limit (10 MeV)
+    'fast_cutoff': 3e6,         # Fast upper limit (3 MeV)
+    'very_fast_cutoff': 20e6,   # Very-fast upper limit (20 MeV)
 
     # LOG_1001 energy bins
     'log_1001_bins': np.logspace(np.log10(1e-5), np.log10(20.0e6), 1001),
@@ -198,6 +239,9 @@ def get_derived_dimensions():
         else:
             # Default: use the moderator outer radius as the assembly size
             derived['assembly_width'] = 2 * inputs['candu_moderator_or']
+    elif inputs['assembly_type'] == 'sodium':
+        # SFR uses hexagonal assembly pitch
+        derived['assembly_width'] = inputs['sfr_assembly_pitch']
     else:
         # AP1000 uses lattice-based assembly
         derived['assembly_width'] = inputs['n_pins'] * inputs['pin_pitch']
@@ -233,18 +277,50 @@ def get_derived_dimensions():
         inputs['fast_cutoff']
     ]
 
+    # Four-group energy bins [thermal, epithermal, fast, very-fast]
+    derived['four_group_bins'] = [
+        0.0,
+        inputs['thermal_cutoff'],       # 0.625 eV
+        inputs['epithermal_cutoff'],    # 100 keV
+        inputs['fast_cutoff'],          # 3 MeV
+        inputs['very_fast_cutoff']      # 20 MeV (upper limit)
+    ]
+
     # --- Power density calculation in kW/L (= MW/m^3) ---
     # Select appropriate lattice based on assembly type
     if inputs['assembly_type'] == 'candu':
         core_lattice = inputs['candu_lattice']
-    else:
-        core_lattice = inputs['ap1000_lattice']
+        n_fuel_assemblies = sum(row.count('F') for row in core_lattice)
+        assembly_width_m = derived['assembly_width'] / 100.0 # (cm to m)
+        assembly_height_m = inputs['fuel_height'] / 100.0
+        assembly_volume_m3 = assembly_width_m * assembly_width_m * assembly_height_m
+        total_fuelvol_m3 = n_fuel_assemblies * assembly_volume_m3
+    elif inputs['assembly_type'] == 'sodium':
+        # SFR: count fuel assemblies from ring configuration
+        # Total assemblies = sum of inner and outer fuel rings
+        # Each ring i has 6*i assemblies (hexagonal geometry)
+        n_fuel_assemblies = 0
+        total_rings = inputs['sfr_inner_fuel_rings'] + inputs['sfr_outer_fuel_rings']
+        for i in range(1, total_rings + 1):
+            n_fuel_assemblies += 6 * i
+        # Center assembly
+        n_fuel_assemblies += 1
 
-    n_fuel_assemblies = sum(row.count('F') for row in core_lattice)
-    assembly_width_m = derived['assembly_width'] / 100.0 # (cm to m)
-    assembly_height_m = inputs['fuel_height'] / 100.0
-    assembly_volume_m3 = assembly_width_m * assembly_width_m * assembly_height_m
-    total_fuelvol_m3 = n_fuel_assemblies * assembly_volume_m3
+        # For hexagonal assembly, use pitch and height
+        assembly_width_m = derived['assembly_width'] / 100.0 # (cm to m)
+        assembly_height_m = inputs['sfr_axial_height'] * 2 / 100.0  # Full height (2x half-height)
+        # Hexagonal volume approximation
+        assembly_volume_m3 = assembly_width_m * assembly_width_m * assembly_height_m * 0.866  # hex factor
+        total_fuelvol_m3 = n_fuel_assemblies * assembly_volume_m3
+    else:
+        # AP1000
+        core_lattice = inputs['ap1000_lattice']
+        n_fuel_assemblies = sum(row.count('F') for row in core_lattice)
+        assembly_width_m = derived['assembly_width'] / 100.0 # (cm to m)
+        assembly_height_m = inputs['fuel_height'] / 100.0
+        assembly_volume_m3 = assembly_width_m * assembly_width_m * assembly_height_m
+        total_fuelvol_m3 = n_fuel_assemblies * assembly_volume_m3
+
     derived['power_density_kW_per_L'] = inputs['core_power'] / total_fuelvol_m3 if total_fuelvol_m3 > 0 else float('nan')
 
     derived['n_fuel_assemblies'] = n_fuel_assemblies

@@ -652,17 +652,29 @@ if __name__ == '__main__':
         print("Example: python plot_tallies.py simulation_raw/statepoint.500.h5")
         sys.exit(1)
 
-    # Load statepoint once for all plots
-    print("\n" + "="*60)
-    print("TRITIUM BREEDER TALLY VISUALIZATION")
-    print("="*60)
-    sp = openmc.StatePoint(statepoint_path)
+    # Check if this is an SFR simulation
+    is_sfr = (inputs['assembly_type'] == 'sodium')
 
-    # Create all plots
-    plot_tritium_breeder_tallies(statepoint_path)
-    plot_core_radial_flux(sp)
-    plot_tritium_assembly_heatmap(sp)
+    if is_sfr:
+        # Use SFR plotting functions
+        print("\n" + "="*60)
+        print("SFR TALLY VISUALIZATION")
+        print("="*60)
 
-    print("\n" + "="*60)
-    print("ALL PLOTS COMPLETED!")
-    print("="*60)
+        from plot_tallies_sfr import plot_all_sfr_tallies
+        plot_all_sfr_tallies(statepoint_path)
+    else:
+        # Use standard CANDU/AP1000 plotting
+        print("\n" + "="*60)
+        print("TRITIUM BREEDER TALLY VISUALIZATION")
+        print("="*60)
+        sp = openmc.StatePoint(statepoint_path)
+
+        # Create all plots
+        plot_tritium_breeder_tallies(statepoint_path)
+        plot_core_radial_flux(sp)
+        plot_tritium_assembly_heatmap(sp)
+
+        print("\n" + "="*60)
+        print("ALL PLOTS COMPLETED!")
+        print("="*60)

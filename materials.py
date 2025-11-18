@@ -328,6 +328,71 @@ def make_materials():
     vacuum_gap.temperature = 298.15
     materials_list.append(vacuum_gap)
 
+    # ====== SODIUM FAST REACTOR MATERIALS ======
+    # Liquid sodium coolant
+    sodium = openmc.Material(name='sodium')
+    sodium.set_density('g/cm3', 0.96)  # Density at ~700K
+    sodium.add_nuclide('Na23', 1.0)
+    sodium.temperature = inputs.get('sfr_T_sodium', 700.0)
+    materials_list.append(sodium)
+
+    # SS316 Steel (Stainless Steel 316) - for reflector and structure
+    ss316 = openmc.Material(name='ss316')
+    ss316.set_density('g/cm3', 8.0)
+    # Composition in weight percent
+    ss316.add_element('Fe', 0.65, percent_type='wo')  # ~65% Iron
+    ss316.add_element('Cr', 0.17, percent_type='wo')  # ~17% Chromium
+    ss316.add_element('Ni', 0.12, percent_type='wo')  # ~12% Nickel
+    ss316.add_element('Mo', 0.025, percent_type='wo') # ~2.5% Molybdenum
+    ss316.add_element('Mn', 0.02, percent_type='wo')  # ~2% Manganese
+    ss316.add_element('Si', 0.01, percent_type='wo')  # ~1% Silicon
+    ss316.add_element('C', 0.003, percent_type='wo')  # ~0.3% Carbon
+    ss316.add_element('P', 0.0004, percent_type='wo') # ~0.04% Phosphorus
+    ss316.add_element('S', 0.0003, percent_type='wo') # ~0.03% Sulfur
+    ss316.temperature = inputs.get('sfr_T_clad', 700.0)
+    materials_list.append(ss316)
+
+    # MOX Fuel - Inner (higher Pu content)
+    mox_inner = openmc.Material(name='mox_inner')
+    mox_inner.set_density('g/cm3', 10.0)
+    # Composition from notebook: weight fractions
+    mox_inner.add_nuclide('U235', 0.0019, percent_type='wo')
+    mox_inner.add_nuclide('U238', 0.7509, percent_type='wo')
+    mox_inner.add_nuclide('Pu238', 0.0046, percent_type='wo')
+    mox_inner.add_nuclide('Pu239', 0.0612, percent_type='wo')
+    mox_inner.add_nuclide('Pu240', 0.0383, percent_type='wo')
+    mox_inner.add_nuclide('Pu241', 0.0106, percent_type='wo')
+    mox_inner.add_nuclide('Pu242', 0.0134, percent_type='wo')
+    mox_inner.add_nuclide('Am241', 0.001, percent_type='wo')
+    mox_inner.add_nuclide('O16', 0.1181, percent_type='wo')
+    mox_inner.temperature = inputs.get('sfr_T_fuel', 900.0)
+    materials_list.append(mox_inner)
+
+    # MOX Fuel - Outer (lower Pu content)
+    mox_outer = openmc.Material(name='mox_outer')
+    mox_outer.set_density('g/cm3', 10.0)
+    # Composition from notebook: weight fractions
+    mox_outer.add_nuclide('U235', 0.0018, percent_type='wo')
+    mox_outer.add_nuclide('U238', 0.73, percent_type='wo')
+    mox_outer.add_nuclide('Pu238', 0.0053, percent_type='wo')
+    mox_outer.add_nuclide('Pu239', 0.0711, percent_type='wo')
+    mox_outer.add_nuclide('Pu240', 0.0445, percent_type='wo')
+    mox_outer.add_nuclide('Pu241', 0.0124, percent_type='wo')
+    mox_outer.add_nuclide('Pu242', 0.0156, percent_type='wo')
+    mox_outer.add_nuclide('Am241', 0.0017, percent_type='wo')
+    mox_outer.add_nuclide('O16', 0.1176, percent_type='wo')
+    mox_outer.temperature = inputs.get('sfr_T_fuel', 900.0)
+    materials_list.append(mox_outer)
+
+    # SFR Cladding (Cu-Al2O3 composite from notebook)
+    sfr_clad = openmc.Material(name='sfr_clad')
+    sfr_clad.set_density('g/cm3', 10.0)
+    sfr_clad.add_element('Cu', 0.997, percent_type='wo')
+    sfr_clad.add_element('Al', 0.003 * 2.0/3.0, percent_type='wo')  # Al from Al2O3
+    sfr_clad.add_element('O', 0.003 * 1.0/3.0, percent_type='wo')   # O from Al2O3
+    sfr_clad.temperature = inputs.get('sfr_T_clad', 700.0)
+    materials_list.append(sfr_clad)
+
     # Create materials collection
     materials = openmc.Materials(materials_list)
 
