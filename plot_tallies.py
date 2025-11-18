@@ -599,9 +599,13 @@ def plot_tritium_assembly_heatmap(sp, output_dir='tally_figures'):
     calandria_or = inputs['candu_calandria_or']
 
     for flux_name, flux_2d, ax in flux_data:
-        # Plot heatmap
+        # Plot heatmap with log scale
+        vmin = np.max(flux_2d) * 1e-3  # Set lower limit to avoid zero issues
+        vmax = np.max(flux_2d)
+
         im = ax.pcolormesh(x_edges, y_edges, flux_2d,
                           cmap='viridis',
+                          norm=plt.matplotlib.colors.LogNorm(vmin=vmin, vmax=vmax),
                           shading='flat')
 
         # Add assembly boundaries (3x3 grid centered on T_1)

@@ -91,7 +91,7 @@ def create_tritium_breeder_surface_tallies(geometry, surfaces_dict, energy_filte
     tritium_info = surfaces_dict.get('tritium_info')
     if tritium_info is None:
         print("\n  Warning: No tritium breeder assemblies found in geometry")
-        return tallies
+    return tallies
 
     # Get cells and surfaces
     try:
@@ -109,7 +109,7 @@ def create_tritium_breeder_surface_tallies(geometry, surfaces_dict, energy_filte
         print(f"\n  Warning: Could not find required cell or surface in tritium_info: {e}")
         print(f"  Available cells: {list(cells_dict.keys()) if 'cells_dict' in locals() else 'N/A'}")
         print(f"  Available surfaces: {list(surf_dict.keys()) if 'surf_dict' in locals() else 'N/A'}")
-        return tallies
+    return tallies
 
     # Use pre-created energy filters
     thermal_filter = energy_filters['thermal']
@@ -421,12 +421,9 @@ def create_tritium_assembly_mesh_tally(energy_filters):
     # Calculate T_1 center position (lattice is centered at origin)
     if t1_row is not None and t1_col is not None:
         # Position relative to center of lattice
-        # In OpenMC RectLattice: universe[i][j] where i=row (Y), j=col (X)
-        # lattice.lower_left sets the corner, and universe[0][0] starts there
-        # Since lower_left = (-n_cols*w/2, -n_rows*w/2), universe[0][0] is at bottom-left
-        # Therefore: Y increases with row index (row 0 = bottom)
-        x_center = (t1_col - n_cols/2 + 0.5) * assembly_width
-        y_center = (t1_row - n_rows/2 + 0.5) * assembly_width
+        # Adjust by +1 row to center properly on the assembly
+        x_center = (t1_col - n_cols/2) * assembly_width
+        y_center = -((t1_row + 1) - n_rows/2) * assembly_width
     else:
         # Default to origin if T_1 not found
         x_center, y_center = 0.0, 0.0
