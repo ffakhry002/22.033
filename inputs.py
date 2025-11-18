@@ -149,7 +149,7 @@ inputs = {
     'sfr_ss316_wall_thickness': 20.0,  # SS316 wall thickness outside core (cm)
 
     # SFR axial dimensions (cm)
-    'sfr_axial_height': 100.0,    # Active fuel height (half-core from z=0)
+    'sfr_axial_height': 50.0,    # Active fuel height (half-core from z=0) - matches benchmark
     'sfr_axial_reflector_thickness': 30.0,  # Axial reflector thickness (top and bottom, SS316)
 
     # SFR tritium breeder (scaled to fit in hexagonal assembly)

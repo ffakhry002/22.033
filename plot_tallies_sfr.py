@@ -495,17 +495,21 @@ def plot_sfr_tritium_assembly_heatmap(sp, output_dir='tally_figures'):
                               shading='flat')
 
             # Add hexagonal assembly boundaries
-            # Draw hexagons using proper hexagonal lattice positions
+            # Draw 7 hexagons (center + 6 surrounding) using proper flat-top hex lattice
             from matplotlib.patches import RegularPolygon
 
-            # Center hexagon (tritium breeder at origin)
-            hex_circumradius = hex_edge * 2 / np.sqrt(3)
+            # For flat-top hexagons (orientation='x'):
+            # circumradius = edge_length / sqrt(3) * 2
+            # But RegularPolygon's radius is the circumradius (vertex to center distance)
+            # For edge_length e, circumradius = e
+            hex_circumradius = hex_edge
 
+            # Center hexagon (tritium breeder at origin)
             hexagon_center = RegularPolygon(
                 (0, 0),
                 numVertices=6,
                 radius=hex_circumradius,
-                orientation=0,  # flat-top (orientation='x')
+                orientation=np.pi/6,  # Rotate 30° for flat-top (pointing right)
                 fill=False,
                 edgecolor='white',
                 linewidth=3,
@@ -516,8 +520,9 @@ def plot_sfr_tritium_assembly_heatmap(sp, output_dir='tally_figures'):
             ax.add_patch(hexagon_center)
 
             # Ring 1: 6 hexagons around center
-            # For flat-topped hex lattice, nearest neighbors are at:
-            pitch = assembly_width
+            # For flat-topped hex lattice with pitch p:
+            # Neighbors are at distance p from center
+            pitch = assembly_width  # 21.08 cm
             hex_positions = [
                 (pitch, 0),                          # Right
                 (pitch/2, pitch * np.sqrt(3)/2),     # Upper-right
@@ -532,7 +537,7 @@ def plot_sfr_tritium_assembly_heatmap(sp, output_dir='tally_figures'):
                     (x_pos, y_pos),
                     numVertices=6,
                     radius=hex_circumradius,
-                    orientation=0,
+                    orientation=np.pi/6,  # Same orientation as center
                     fill=False,
                     edgecolor='white',
                     linewidth=2,
@@ -646,7 +651,7 @@ def plot_sfr_core_flux_heatmaps(sp, output_dir='tally_figures'):
 
         if flux_max > 0:
             im = ax.pcolormesh(x_edges, y_edges, flux_2d.T,  # Transpose for correct orientation
-                              cmap='hot',
+                              cmap='viridis',
                               norm=plt.matplotlib.colors.LogNorm(vmin=flux_min, vmax=flux_max),
                               shading='flat')
 
