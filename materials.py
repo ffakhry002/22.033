@@ -388,10 +388,19 @@ def make_materials():
     sfr_clad = openmc.Material(name='sfr_clad')
     sfr_clad.set_density('g/cm3', 10.0)
     sfr_clad.add_element('Cu', 0.997, percent_type='wo')
-    sfr_clad.add_element('Al', 0.003 * 2.0/3.0, percent_type='wo')  # Al from Al2O3
-    sfr_clad.add_element('O', 0.003 * 1.0/3.0, percent_type='wo')   # O from Al2O3
+    # Correct Al2O3 stoichiometry: MW(Al2O3) = 102, Al = 54/102, O = 48/102
+    sfr_clad.add_element('Al', 0.003 * 54.0/102.0, percent_type='wo')  # Al from Al2O3
+    sfr_clad.add_element('O', 0.003 * 48.0/102.0, percent_type='wo')   # O from Al2O3
     sfr_clad.temperature = inputs.get('sfr_T_clad', 700.0)
     materials_list.append(sfr_clad)
+
+    # MgO reflector (low neutron absorption, excellent for fast spectrum)
+    mgo_reflector = openmc.Material(name='mgo_reflector')
+    mgo_reflector.set_density('g/cm3', 3.58)  # MgO density
+    mgo_reflector.add_element('Mg', 1.0, percent_type='ao')
+    mgo_reflector.add_element('O', 1.0, percent_type='ao')
+    mgo_reflector.temperature = inputs.get('sfr_T_clad', 700.0)
+    materials_list.append(mgo_reflector)
 
     # Create materials collection
     materials = openmc.Materials(materials_list)
