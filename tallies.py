@@ -73,12 +73,17 @@ def create_normalization_tallies():
     return tallies
 
 
-def create_tritium_breeder_surface_tallies(geometry, surfaces_dict):
+def create_tritium_breeder_surface_tallies(geometry, surfaces_dict, energy_filters):
     """Create surface tallies for tritium breeder assembly.
 
     Creates:
     1. Surface tally on calandria outer surface (neutrons from moderator entering)
     2. Surface tally on pressure tube inner surface (neutrons from pressure tube entering breeder)
+
+    Parameters
+    ----------
+    energy_filters : dict
+        Pre-created energy filters to avoid ID duplication
     """
     tallies = openmc.Tallies()
 
@@ -100,11 +105,11 @@ def create_tritium_breeder_surface_tallies(geometry, surfaces_dict):
     calandria_outer = surf_dict['calandria_outer']
     pt_inner = surf_dict['pt_inner']
 
-    # Energy filters
-    thermal_filter = openmc.EnergyFilter([0.0, inputs['thermal_cutoff']])
-    epithermal_filter = openmc.EnergyFilter([inputs['thermal_cutoff'], inputs['epithermal_cutoff']])
-    fast_filter = openmc.EnergyFilter([inputs['epithermal_cutoff'], inputs['fast_cutoff']])
-    log_1001_filter = openmc.EnergyFilter(inputs['log_1001_bins'])
+    # Use pre-created energy filters
+    thermal_filter = energy_filters['thermal']
+    epithermal_filter = energy_filters['epithermal']
+    fast_filter = energy_filters['fast']
+    log_1001_filter = energy_filters['log_1001']
 
     # 1. Calandria outer surface - neutrons from moderator entering
     # We use CellFromFilter to get only neutrons coming FROM the moderator cell
@@ -209,6 +214,7 @@ def create_tritium_breeding_tally(geometry, surfaces_dict):
         return tallies
 
     # Create cell filter for all tritium breeder cells (breeder + coolant)
+    # Assign unique ID to avoid conflicts
     tritium_filter = openmc.CellFilter(tritium_cells)
 
     # Create tritium production tally
@@ -243,10 +249,15 @@ def create_tritium_breeding_tally(geometry, surfaces_dict):
     return tallies
 
 
-def create_tritium_breeder_flux_tallies(geometry, surfaces_dict):
+def create_tritium_breeder_flux_tallies(geometry, surfaces_dict, energy_filters):
     """Create flux tallies for the tritium breeder assembly.
 
     This tallies neutron flux in the breeding region with energy discretization.
+
+    Parameters
+    ----------
+    energy_filters : dict
+        Pre-created energy filters to avoid ID duplication
     """
     tallies = openmc.Tallies()
 
@@ -269,11 +280,11 @@ def create_tritium_breeder_flux_tallies(geometry, surfaces_dict):
     # Create cell filter for all tritium breeder cells
     tritium_filter = openmc.CellFilter(tritium_cells)
 
-    # Energy filters
-    thermal_filter = openmc.EnergyFilter([0.0, inputs['thermal_cutoff']])
-    epithermal_filter = openmc.EnergyFilter([inputs['thermal_cutoff'], inputs['epithermal_cutoff']])
-    fast_filter = openmc.EnergyFilter([inputs['epithermal_cutoff'], inputs['fast_cutoff']])
-    log_1001_filter = openmc.EnergyFilter(inputs['log_1001_bins'])
+    # Use pre-created energy filters
+    thermal_filter = energy_filters['thermal']
+    epithermal_filter = energy_filters['epithermal']
+    fast_filter = energy_filters['fast']
+    log_1001_filter = energy_filters['log_1001']
 
     # Total flux
     total_flux = openmc.Tally(name='tritium_breeder_flux_total')
@@ -312,23 +323,30 @@ def create_tritium_breeder_flux_tallies(geometry, surfaces_dict):
     return tallies
 
 
-def create_core_mesh_tallies():
-    """Create full core mesh tallies for radial flux profiles."""
+def create_core_mesh_tallies(energy_filters):
+    """Create full core mesh tallies for radial flux profiles.
+
+    Parameters
+    ----------
+    energy_filters : dict
+        Pre-created energy filters to avoid ID duplication
+    """
     tallies = openmc.Tallies()
     derived = get_derived_dimensions()
 
     # Create rectangular mesh covering entire reactor geometry
+    # Use reasonable size to avoid memory issues (400x400x50 instead of 1000x1000x200)
     mesh = openmc.RegularMesh()
-    mesh.dimension = [inputs['n_radial_bins'], inputs['n_radial_bins'], inputs['n_axial_bins']]
+    mesh.dimension = [400, 400, 50]
     mesh.lower_left = [-derived['r_lithium_wall'], -derived['r_lithium_wall'], derived['z_bottom']]
     mesh.upper_right = [derived['r_lithium_wall'], derived['r_lithium_wall'], derived['z_top']]
 
     mesh_filter = openmc.MeshFilter(mesh)
 
-    # Energy filters for different groups
-    thermal_filter = openmc.EnergyFilter([0.0, inputs['thermal_cutoff']])
-    epithermal_filter = openmc.EnergyFilter([inputs['thermal_cutoff'], inputs['epithermal_cutoff']])
-    fast_filter = openmc.EnergyFilter([inputs['epithermal_cutoff'], inputs['fast_cutoff']])
+    # Use pre-created energy filters
+    thermal_filter = energy_filters['thermal']
+    epithermal_filter = energy_filters['epithermal']
+    fast_filter = energy_filters['fast']
 
     # 1. Total flux (all energies)
     total_flux_tally = openmc.Tally(name='core_mesh_total_flux')
@@ -356,13 +374,19 @@ def create_core_mesh_tallies():
 
     print("\nCreated core mesh tallies:")
     print("  - Total, Thermal, Epithermal, Fast flux")
-    print(f"  Mesh: {inputs['n_radial_bins']} x {inputs['n_radial_bins']} x {inputs['n_axial_bins']}")
+    print(f"  Mesh: 400 x 400 x 50")
 
     return tallies
 
 
-def create_tritium_assembly_mesh_tally():
-    """Create 3x3 assembly mesh centered on tritium breeder (50x50x1)."""
+def create_tritium_assembly_mesh_tally(energy_filters):
+    """Create 3x3 assembly mesh centered on tritium breeder (50x50x1).
+
+    Parameters
+    ----------
+    energy_filters : dict
+        Pre-created energy filters to avoid ID duplication
+    """
     tallies = openmc.Tallies()
     derived = get_derived_dimensions()
 
@@ -409,10 +433,10 @@ def create_tritium_assembly_mesh_tally():
 
     mesh_filter = openmc.MeshFilter(mesh)
 
-    # Energy filters
-    thermal_filter = openmc.EnergyFilter([0.0, inputs['thermal_cutoff']])
-    epithermal_filter = openmc.EnergyFilter([inputs['thermal_cutoff'], inputs['epithermal_cutoff']])
-    fast_filter = openmc.EnergyFilter([inputs['epithermal_cutoff'], inputs['fast_cutoff']])
+    # Use pre-created energy filters
+    thermal_filter = energy_filters['thermal']
+    epithermal_filter = energy_filters['epithermal']
+    fast_filter = energy_filters['fast']
 
     # Total flux
     total_tally = openmc.Tally(name='tritium_assembly_mesh_total')
@@ -459,12 +483,20 @@ def create_all_tallies(geometry, surfaces_dict):
     """
     all_tallies = openmc.Tallies()
 
+    # Create energy filters ONCE to avoid ID duplication
+    energy_filters = {
+        'thermal': openmc.EnergyFilter([0.0, inputs['thermal_cutoff']]),
+        'epithermal': openmc.EnergyFilter([inputs['thermal_cutoff'], inputs['epithermal_cutoff']]),
+        'fast': openmc.EnergyFilter([inputs['epithermal_cutoff'], inputs['fast_cutoff']]),
+        'log_1001': openmc.EnergyFilter(inputs['log_1001_bins'])
+    }
+
     # 1. Normalization tallies (for flux normalization)
     norm_tallies = create_normalization_tallies()
     all_tallies.extend(norm_tallies)
 
     # 2. Tritium breeder surface tallies
-    surface_tallies = create_tritium_breeder_surface_tallies(geometry, surfaces_dict)
+    surface_tallies = create_tritium_breeder_surface_tallies(geometry, surfaces_dict, energy_filters)
     all_tallies.extend(surface_tallies)
 
     # 3. Tritium breeding tallies
@@ -472,15 +504,15 @@ def create_all_tallies(geometry, surfaces_dict):
     all_tallies.extend(tbr_tallies)
 
     # 4. Tritium breeder flux tallies
-    flux_tallies = create_tritium_breeder_flux_tallies(geometry, surfaces_dict)
+    flux_tallies = create_tritium_breeder_flux_tallies(geometry, surfaces_dict, energy_filters)
     all_tallies.extend(flux_tallies)
 
     # 5. Core mesh tallies (for radial plots)
-    core_mesh_tallies = create_core_mesh_tallies()
+    core_mesh_tallies = create_core_mesh_tallies(energy_filters)
     all_tallies.extend(core_mesh_tallies)
 
     # 6. Tritium assembly mesh tally (3x3 assembly heatmap)
-    assembly_mesh_tallies = create_tritium_assembly_mesh_tally()
+    assembly_mesh_tallies = create_tritium_assembly_mesh_tally(energy_filters)
     all_tallies.extend(assembly_mesh_tallies)
 
     print("\n" + "="*60)

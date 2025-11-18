@@ -136,11 +136,11 @@ def run_simulation():
     derived = get_derived_dimensions()
     source_dist = openmc.stats.Box(
         [-inputs['r_core'], -inputs['r_core'], derived['z_fuel_bottom']],
-        [inputs['r_core'], inputs['r_core'], derived['z_fuel_top']],
-        only_fissionable=True
+        [inputs['r_core'], inputs['r_core'], derived['z_fuel_top']]
     )
     source = openmc.IndependentSource()
     source.space = source_dist
+    source.constraints = {'fissionable': True}  # Use constraints instead of only_fissionable
     settings.source = source
 
     # Entropy mesh for convergence
