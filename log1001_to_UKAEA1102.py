@@ -354,6 +354,121 @@ def extract_surface_currents(sp, norm_factor, ukaea_energies, output_path):
     return results
 
 
+def extract_tritium_breeder_currents(sp, norm_factor, ukaea_energies, output_path):
+    """Extract and convert tritium breeder assembly surface current tallies (INWARD)."""
+
+    derived = get_derived_dimensions()
+
+    # Define the two tritium breeder surfaces
+    surfaces = {
+        'tritium_calandria_outer': {
+            'radius': inputs['candu_calandria_or'],  # 6.7526 cm
+            'description': 'Calandria Outer (from moderator, INWARD)'
+        },
+        'tritium_pt_inner': {
+            'radius': inputs['candu_pressure_tube_ir'],  # 5.1689 cm
+            'description': 'Pressure Tube Inner (from PT, INWARD)'
+        }
+    }
+
+    # Calculate surface areas
+    height = derived['z_fuel_top'] - derived['z_fuel_bottom']
+    for surf_info in surfaces.values():
+        surf_info['area'] = 2 * np.pi * surf_info['radius'] * height  # cm²
+
+    print("\n" + "="*70)
+    print("Processing Tritium Breeder Surface Current Tallies (INWARD)")
+    print("="*70)
+
+    results = {}
+
+    for surf_name, surf_info in surfaces.items():
+        print(f"\nProcessing INWARD current at: {surf_name}")
+        print(f"  Description: {surf_info['description']}")
+        print("-" * 40)
+
+        # Get log1001 surface current tally
+        tally_name = f'{surf_name}_current_log1001'
+        try:
+            tally = sp.get_tally(name=tally_name)
+        except:
+            print(f"  ERROR: Could not find tally {tally_name}")
+            continue
+
+        # Extract energy filter and current data
+        energy_filter = tally.find_filter(openmc.EnergyFilter)
+        energy_bins = energy_filter.bins  # Shape: (1001, 2) in eV, ascending
+
+        # Get bin boundaries (ascending order)
+        log1001_boundaries = np.concatenate(([energy_bins[0, 0]], energy_bins[:, 1]))
+
+        # Get current values and normalize
+        surface_area = surf_info['area']
+        radius = surf_info['radius']
+
+        # Current is NEGATIVE for inward (CellFromFilter gives negative for inward)
+        # Multiply by -1 to get positive inward current
+        current_values = -tally.mean.flatten() * norm_factor  # n/s (total INWARD current, now positive)
+        current_density = current_values / surface_area  # n/cm²/s (current density)
+        current_std = tally.std_dev.flatten() * norm_factor / surface_area
+
+        print(f"  Surface area: {surface_area:.2e} cm²")
+        print(f"  Radius: {radius:.4f} cm")
+        print(f"  Height: {height:.1f} cm")
+        print(f"  Original energy bins: {len(current_density)}")
+        print(f"  Energy range: {log1001_boundaries[0]:.2e} to {log1001_boundaries[-1]:.2e} eV")
+        print(f"  Total INWARD current: {np.sum(current_values):.4e} n/s")
+        print(f"  Total INWARD current density: {np.sum(current_density):.4e} n/cm²/s")
+
+        # Rebin to UKAEA-1102 structure
+        ukaea_current = rebin_flux_conservative(log1001_boundaries, current_density, ukaea_energies)
+
+        print(f"  Rebinned groups: {len(ukaea_current)}")
+        print(f"  Total current density (after rebinning): {np.sum(ukaea_current):.4e} n/cm²/s")
+
+        # Check conservation
+        conservation_ratio = np.sum(ukaea_current) / np.sum(current_density) if np.sum(current_density) > 0 else 0
+        print(f"  Current conservation: {conservation_ratio:.4f}")
+
+        # Calculate energy groups
+        energy_breakdown = calculate_energy_groups(ukaea_current, ukaea_energies)
+
+        # Store results
+        results[surf_name] = {
+            'current_density': ukaea_current,
+            'total_density': np.sum(ukaea_current),
+            'total_current': np.sum(ukaea_current) * surface_area,
+            'max_density': np.max(ukaea_current),
+            'area': surface_area,
+            'radius': radius,
+            'description': surf_info['description'],
+            'thermal_density': energy_breakdown['thermal'],
+            'epithermal_density': energy_breakdown['epithermal'],
+            'fast_density': energy_breakdown['fast'],
+            'thermal_current': energy_breakdown['thermal'] * surface_area,
+            'epithermal_current': energy_breakdown['epithermal'] * surface_area,
+            'fast_current': energy_breakdown['fast'] * surface_area
+        }
+
+        # Write output file for current density
+        output_file = output_path / 'tritium_breeder_currents' / f'{surf_name}_current_ukaea1102.txt'
+        output_file.parent.mkdir(exist_ok=True)
+        write_fispact_format(output_file, ukaea_current, ukaea_energies,
+                           f"{surf_info['description']}", surface_area,
+                           "n/cm²/s", "Surface area")
+        print(f"  Output saved to: {output_file}")
+
+        # Also write total current (not density) file
+        output_file_total = output_path / 'tritium_breeder_currents' / f'{surf_name}_current_total_ukaea1102.txt'
+        ukaea_current_total = ukaea_current * surface_area  # Convert to total n/s
+        write_fispact_format(output_file_total, ukaea_current_total, ukaea_energies,
+                           f"{surf_info['description']} (total)", surface_area,
+                           "n/s", "Surface area")
+        print(f"  Total current saved to: {output_file_total}")
+
+    return results
+
+
 def write_fispact_format(filename, flux_values, energies, description, geometry_param, units, param_name):
     """Write data in FISPACT-II format."""
     with open(filename, 'w') as f:
@@ -383,7 +498,7 @@ def write_fispact_format(filename, flux_values, energies, description, geometry_
 
 
 def write_detailed_summary(output_path, statepoint_file, keff, power_mw, norm_factor,
-                          flux_results, current_results):
+                          flux_results, current_results, tritium_current_results=None):
     """Write detailed summary file with energy breakdowns."""
 
     # Get energy boundaries from inputs
@@ -516,12 +631,65 @@ def write_detailed_summary(output_path, statepoint_file, keff, power_mw, norm_fa
                 f.write(f"{surface:<15} {data['radius']:<10.1f} {t_pct:<20.2f} "
                        f"{e_pct:<20.2f} {f_pct:<20.2f} {'100.00':<20}\n")
 
+        # Add tritium breeder currents section if available
+        if tritium_current_results:
+            f.write("\n" + "="*100 + "\n")
+            f.write("TRITIUM BREEDER SURFACE CURRENTS (INWARD)\n")
+            f.write("="*100 + "\n")
+
+            # Energy breakdown - CURRENT DENSITY [n/cm²/s]
+            f.write("\n" + "="*100 + "\n")
+            f.write("ENERGY BREAKDOWN - CURRENT DENSITY [n/cm²/s]\n")
+            f.write("-"*100 + "\n")
+            f.write(f"{'Surface':<30} {'Radius':<10} {'Thermal':<20} {'Epithermal':<20} {'Fast':<20} {'Total':<20}\n")
+            f.write(f"{'':30} {'[cm]':<10} {'(<' + str(thermal_cutoff_eV) + ' eV)':<20} "
+                   f"{'(' + str(thermal_cutoff_eV) + 'eV-' + str(epithermal_cutoff_keV) + 'keV)':<20} "
+                   f"{'(>' + str(epithermal_cutoff_keV) + 'keV)':<20} {'':<20}\n")
+            f.write("-"*100 + "\n")
+
+            for surface, data in tritium_current_results.items():
+                f.write(f"{data['description']:<30} {data['radius']:<10.4f} {data['thermal_density']:<20.4e} "
+                       f"{data['epithermal_density']:<20.4e} {data['fast_density']:<20.4e} "
+                       f"{data['total_density']:<20.4e}\n")
+
+            # Energy breakdown - TOTAL CURRENT [n/s]
+            f.write("\n" + "="*100 + "\n")
+            f.write("ENERGY BREAKDOWN - TOTAL CURRENT [n/s]\n")
+            f.write("-"*100 + "\n")
+            f.write(f"{'Surface':<30} {'Radius':<10} {'Thermal':<20} {'Epithermal':<20} {'Fast':<20} {'Total':<20}\n")
+            f.write(f"{'':30} {'[cm]':<10} {'(<' + str(thermal_cutoff_eV) + ' eV)':<20} "
+                   f"{'(' + str(thermal_cutoff_eV) + 'eV-' + str(epithermal_cutoff_keV) + 'keV)':<20} "
+                   f"{'(>' + str(epithermal_cutoff_keV) + 'keV)':<20} {'':<20}\n")
+            f.write("-"*100 + "\n")
+
+            for surface, data in tritium_current_results.items():
+                f.write(f"{data['description']:<30} {data['radius']:<10.4f} {data['thermal_current']:<20.4e} "
+                       f"{data['epithermal_current']:<20.4e} {data['fast_current']:<20.4e} "
+                       f"{data['total_current']:<20.4e}\n")
+
+            # Energy breakdown - PERCENTAGES
+            f.write("\n" + "="*100 + "\n")
+            f.write("ENERGY BREAKDOWN - PERCENTAGE\n")
+            f.write("-"*100 + "\n")
+            f.write(f"{'Surface':<30} {'Radius':<10} {'Thermal %':<20} {'Epithermal %':<20} {'Fast %':<20} {'Total':<20}\n")
+            f.write("-"*100 + "\n")
+
+            for surface, data in tritium_current_results.items():
+                total = data['total_density']
+                t_pct = (data['thermal_density']/total*100) if total > 0 else 0
+                e_pct = (data['epithermal_density']/total*100) if total > 0 else 0
+                f_pct = (data['fast_density']/total*100) if total > 0 else 0
+                f.write(f"{data['description']:<30} {data['radius']:<10.4f} {t_pct:<20.2f} "
+                       f"{e_pct:<20.2f} {f_pct:<20.2f} {'100.00':<20}\n")
+
         # File locations
         f.write("\n" + "="*100 + "\n")
         f.write("OUTPUT FILE LOCATIONS\n")
         f.write("-"*100 + "\n")
         f.write(f"Cell fluxes:      {output_path}/cell_fluxes/\n")
         f.write(f"Surface currents: {output_path}/surface_currents/\n")
+        if tritium_current_results:
+            f.write(f"Tritium breeder currents: {output_path}/tritium_breeder_currents/\n")
         f.write("\n" + "="*100 + "\n")
 
     print(f"\nDetailed summary saved to: {summary_file}")
@@ -566,6 +734,9 @@ def extract_and_convert_all(statepoint_file='simulation_raw/statepoint.250.h5',
     # Extract surface currents
     current_results = extract_surface_currents(sp, norm_factor, ukaea_energies, output_path)
 
+    # Extract tritium breeder surface currents
+    tritium_current_results = extract_tritium_breeder_currents(sp, norm_factor, ukaea_energies, output_path)
+
     # Print quick summary
     print("\n" + "="*70)
     print("CONVERSION COMPLETE")
@@ -573,12 +744,12 @@ def extract_and_convert_all(statepoint_file='simulation_raw/statepoint.250.h5',
 
     # Write detailed summary with energy breakdowns
     write_detailed_summary(output_path, statepoint_file, keff, power_mw, norm_factor,
-                          flux_results, current_results)
+                          flux_results, current_results, tritium_current_results)
 
     print("\nConversion complete!")
     print(f"Check {output_path}/conversion_summary.txt for detailed energy breakdowns")
 
-    return flux_results, current_results
+    return flux_results, current_results, tritium_current_results
 
 
 if __name__ == '__main__':

@@ -39,6 +39,9 @@ MATERIAL_COLORS = {
     'candu_calandria_tube': 'black',
     'candu_gap': 'white',
     'candu_fuel_gap': 'green',
+    # Tritium breeder assembly materials
+    'ti_grade7': 'purple',
+    'vacuum_gap': 'lavender',
 }
 
 def CANDU_pin(mat_dict, fuel_mat_name):
@@ -136,7 +139,8 @@ def CANDU_bundle(mat_dict):
 
             # Create fuel cell (relative to pin center)
             fuel_cell = openmc.Cell(fill=mat_dict[fuel_mat_name], region=-surf_fuel)
-            fuel_cell.id = (i + 1) * 1000 + j
+            # Don't assign ID - causes warnings when universe is reused
+            # fuel_cell.id = (i + 1) * 1000 + j
             fuel_cells.append(fuel_cell)
 
             # Create gap cell (between fuel and cladding inner)
@@ -154,7 +158,8 @@ def CANDU_bundle(mat_dict):
             # Create pin cell
             pin = openmc.Cell(fill=pin_universe, region=-pin_boundary)
             pin.translation = (x, y, 0)
-            pin.id = (i + 1)*100 + j
+            # Don't assign ID - causes warnings when universe is reused
+            # pin.id = (i + 1)*100 + j
             bundle_universe.add_cell(pin)
             pin_cells.append(pin)
 
@@ -191,6 +196,112 @@ def CANDU_assembly(mat_dict):
     root_universe = openmc.Universe(cells=[bundle, pressure_tube, gap_cell, calandria, moder])
 
     return root_universe
+
+
+def tritium_breeder_assembly(mat_dict):
+    """Create a tritium breeding assembly with Ti-0.2Pd pressure tube, vacuum gap,
+    calandria tube, and internal coolant tubes.
+
+    Returns
+    -------
+    root_universe : openmc.Universe
+        The complete tritium breeder assembly universe
+    cells_dict : dict
+        Dictionary of key cells for tally creation:
+        - 'breeder_cell': The main breeder cell (including coolant tubes)
+        - 'pressure_tube_cell': The pressure tube cell
+        - 'calandria_cell': The calandria tube cell
+    surfaces_dict : dict
+        Dictionary of key surfaces for tally creation:
+        - 'pt_inner': Pressure tube inner surface
+        - 'pt_outer': Pressure tube outer surface
+        - 'calandria_inner': Calandria inner surface
+        - 'calandria_outer': Calandria outer surface
+    """
+    from math import pi, cos, sin
+
+    # Use same outer dimensions as CANDU
+    pressure_tube_ir = inputs['candu_pressure_tube_ir']  # 5.1689 cm
+    pressure_tube_or = inputs['candu_pressure_tube_or']  # 5.621 cm
+    calandria_ir = inputs['candu_calandria_ir']          # 6.6002 cm
+    calandria_or = inputs['candu_calandria_or']          # 6.7526 cm
+
+    # Coolant tube dimensions
+    coolant_tube_or = 1.0  # cm
+    coolant_tube_wall_thickness = 0.1  # cm
+    coolant_tube_ir = coolant_tube_or - coolant_tube_wall_thickness
+
+    # Coolant tube positions: center + 4 at two-thirds radius
+    two_thirds_radius = pressure_tube_ir * 2.0 / 3.0  # 3.446 cm
+    coolant_positions = [
+        (0.0, 0.0),                      # Center
+        (two_thirds_radius, 0.0),        # 3 o'clock
+        (0.0, two_thirds_radius),        # 12 o'clock
+        (-two_thirds_radius, 0.0),       # 9 o'clock
+        (0.0, -two_thirds_radius),       # 6 o'clock
+    ]
+
+    # Create surfaces for main structure
+    pt_inner = openmc.ZCylinder(r=pressure_tube_ir)
+    pt_outer = openmc.ZCylinder(r=pressure_tube_or)
+    calandria_inner = openmc.ZCylinder(r=calandria_ir)
+    calandria_outer = openmc.ZCylinder(r=calandria_or)
+
+    # Select breeder material
+    breeder_material = inputs['breeder_material']
+    breeder_mat = mat_dict[breeder_material]
+
+    # Create breeder region (will exclude coolant tubes)
+    breeder_region = -pt_inner
+
+    # Create coolant tubes
+    tube_cells = []
+    for i, (x, y) in enumerate(coolant_positions):
+        tube_outer_surf = openmc.ZCylinder(x0=x, y0=y, r=coolant_tube_or)
+        tube_inner_surf = openmc.ZCylinder(x0=x, y0=y, r=coolant_tube_ir)
+
+        # Exclude from breeder region
+        breeder_region &= +tube_outer_surf
+
+        # Coolant inside
+        coolant_inner = openmc.Cell(name='tritium_breeder_coolant_inner', fill=mat_dict['ap_1000_coolant'], region=-tube_inner_surf)
+        # Ti-0.2Pd wall
+        tube_wall = openmc.Cell(name='tritium_breeder_coolant_wall', fill=mat_dict['ti_grade7'], region=+tube_inner_surf & -tube_outer_surf)
+
+        tube_cells.extend([coolant_inner, tube_wall])
+
+    # Create breeder cell (excludes coolant tubes but we'll include coolant in tally)
+    breeder_cell = openmc.Cell(name='tritium_breeder_material', fill=breeder_mat, region=breeder_region)
+
+    # Create universe containing breeder and coolant tubes
+    breeder_universe = openmc.Universe(cells=[breeder_cell] + tube_cells)
+
+    # Main assembly cells
+    bundle = openmc.Cell(name='tritium_bundle', fill=breeder_universe, region=-pt_inner)
+    pressure_tube = openmc.Cell(name='tritium_pressure_tube', fill=mat_dict['ti_grade7'], region=+pt_inner & -pt_outer)
+    gap_cell = openmc.Cell(name='tritium_gap', fill=mat_dict['vacuum_gap'], region=+pt_outer & -calandria_inner)
+    calandria = openmc.Cell(name='tritium_calandria', fill=mat_dict['candu_calandria_tube'], region=+calandria_inner & -calandria_outer)
+    moder = openmc.Cell(name='tritium_moderator', fill=mat_dict['candu_moderator'], region=+calandria_outer)
+
+    root_universe = openmc.Universe(cells=[bundle, pressure_tube, gap_cell, calandria, moder])
+
+    # Return universe and key cells/surfaces for tallies
+    cells_dict = {
+        'bundle': bundle,  # Contains the breeder universe
+        'pressure_tube': pressure_tube,
+        'calandria': calandria,
+        'moderator': moder
+    }
+
+    surfaces_dict = {
+        'pt_inner': pt_inner,
+        'pt_outer': pt_outer,
+        'calandria_inner': calandria_inner,
+        'calandria_outer': calandria_outer
+    }
+
+    return root_universe, cells_dict, surfaces_dict
+
 
 def BEAVRS_pin(mat_dict):
     """Create a BEAVRS fuel pin cell universe."""
@@ -267,7 +378,17 @@ def BEAVRS_assembly(mat_dict):
 
 
 def build_core_lattice(mat_dict, cyl_core, plane_bottom, plane_top):
-    """Build a lattice of assemblies based on core_lattice from inputs."""
+    """Build a lattice of assemblies based on core_lattice from inputs.
+
+    Returns
+    -------
+    lattice_cell : openmc.Cell
+        Cell containing the core lattice
+    tritium_info : dict or None
+        Dictionary with tritium breeder assembly info if present:
+        - 'cells_dict': Dictionary of key cells
+        - 'surfaces_dict': Dictionary of key surfaces
+    """
     derived = get_derived_dimensions()
     assembly_width = derived['assembly_width']
 
@@ -284,6 +405,14 @@ def build_core_lattice(mat_dict, cyl_core, plane_bottom, plane_top):
         coolant_outer_universe = openmc.Universe(name='coolant_outer')
         coolant_cell = openmc.Cell(fill=mat_dict['ap_1000_coolant_outer'])
         coolant_outer_universe.add_cell(coolant_cell)
+
+    # Create tritium breeder assembly (can be used multiple times)
+    # Returns universe, cells_dict, and surfaces_dict
+    tritium_assembly, tritium_cells, tritium_surfaces = tritium_breeder_assembly(mat_dict)
+    tritium_info = {
+        'cells_dict': tritium_cells,
+        'surfaces_dict': tritium_surfaces
+    }
 
     # Select appropriate lattice based on assembly type
     if inputs['assembly_type'] == 'candu':
@@ -303,8 +432,10 @@ def build_core_lattice(mat_dict, cyl_core, plane_bottom, plane_top):
                 lattice_row.append(fuel_assembly)
             elif symbol == 'C':
                 lattice_row.append(coolant_outer_universe)
+            elif symbol.startswith('T'):  # T_1, T_2, etc. or just T
+                lattice_row.append(tritium_assembly)
             else:
-                raise ValueError(f"Unknown core lattice symbol: {symbol}. Use 'C' or 'F'.")
+                raise ValueError(f"Unknown core lattice symbol: {symbol}. Use 'C', 'F', or 'T'/'T_1'/'T_2'/...")
         lattice_universes.append(lattice_row)
 
     lattice_universes = np.array(lattice_universes)
@@ -321,7 +452,7 @@ def build_core_lattice(mat_dict, cyl_core, plane_bottom, plane_top):
     lattice_cell.region = -cyl_core & +plane_bottom & -plane_top
     lattice_cell.fill = core_lattice_obj
 
-    return lattice_cell
+    return lattice_cell, tritium_info
 
 
 def create_core(mat_dict):
@@ -388,8 +519,8 @@ def create_core(mat_dict):
     plane_fuel_top = openmc.ZPlane(z0=derived['z_fuel_top'])
     plane_top = openmc.ZPlane(z0=derived['z_top'], boundary_type='vacuum')
 
-    # Build fuel region
-    fuel_region_cell = build_core_lattice(mat_dict, cyl_core, plane_fuel_bottom, plane_fuel_top)
+    # Build fuel region (returns lattice cell and tritium breeder info)
+    fuel_region_cell, tritium_info = build_core_lattice(mat_dict, cyl_core, plane_fuel_bottom, plane_fuel_top)
 
     # Bottom reflector
     bottom_reflector_cell = openmc.Cell(name='bottom_reflector')
@@ -471,6 +602,9 @@ def create_core(mat_dict):
 
     geometry = openmc.Geometry(root_universe)
 
+    # Add tritium breeder assembly info to surfaces_dict
+    surfaces_dict['tritium_info'] = tritium_info
+
     return geometry, surfaces_dict
 
 
@@ -488,6 +622,15 @@ if __name__ == '__main__':
     else:
         pin_universe = BEAVRS_pin(mat_dict)
         assembly_universe = BEAVRS_assembly(mat_dict)
+
+    # Check if we have tritium assemblies in lattice
+    core_lattice = inputs['candu_lattice'] if inputs['assembly_type'] == 'candu' else inputs['ap1000_lattice']
+    has_tritium = any('T' in str(symbol) for row in core_lattice for symbol in row)
+
+    # Create tritium breeder assembly only if present in lattice
+    if has_tritium:
+        tritium_universe, _, _ = tritium_breeder_assembly(mat_dict)
+
     core_geometry, surfaces_dict = create_core(mat_dict)
 
     print("\nGeometry created successfully!")
@@ -534,6 +677,21 @@ if __name__ == '__main__':
     assembly_plot.figure.set_size_inches(8, 8)
     assembly_plot.figure.savefig(figures_dir / 'assembly_xy.png', dpi=inputs['plot_dpi'], bbox_inches='tight')
     plt.close()
+
+    # Plot tritium breeder assembly (if present)
+    if has_tritium:
+        print("Plotting tritium breeder assembly...")
+        tritium_params = {
+            'basis': 'xy',
+            'width': plot_width,
+            'pixels': inputs['plot_pixels'],
+            'color_by': 'material',
+            'colors': mat_colors
+        }
+        tritium_plot = tritium_universe.plot(**tritium_params)
+        tritium_plot.figure.set_size_inches(8, 8)
+        tritium_plot.figure.savefig(figures_dir / 'tritium_assembly_xy.png', dpi=inputs['plot_dpi'], bbox_inches='tight')
+        plt.close()
 
     # Plot core XY
     print("Plotting core XY...")

@@ -49,10 +49,18 @@ def print_simulation_summary(sim_dir):
         # Calculate normalization factor
         norm_factor = calc_norm_factor(power_mw, sp)
 
-        # Get tritium breeding tally
-        tbr_tally = sp.get_tally(name='tritium_breeding_ratio')
-        tritium_per_source = tbr_tally.mean[0, 0, 0]  # T atoms/source neutron
-        tritium_per_source_std = tbr_tally.std_dev[0, 0, 0]
+        # Get tritium breeding tally from tritium breeder assembly
+        try:
+            tbr_tally = sp.get_tally(name='tritium_breeder_production')
+            tritium_per_source = tbr_tally.mean[0, 0, 0]  # T atoms/source neutron
+            tritium_per_source_std = tbr_tally.std_dev[0, 0, 0]
+            tally_source = "Tritium Breeder Assembly"
+        except:
+            # Fallback: try old blanket tally if tritium breeder tally not found
+            tbr_tally = sp.get_tally(name='tritium_breeding_ratio')
+            tritium_per_source = tbr_tally.mean[0, 0, 0]  # T atoms/source neutron
+            tritium_per_source_std = tbr_tally.std_dev[0, 0, 0]
+            tally_source = "Lithium Blanket"
 
         # Calculate absolute tritium production rate
         t_production = tritium_per_source * norm_factor  # T atoms/s
@@ -69,13 +77,29 @@ def print_simulation_summary(sim_dir):
         g_per_s_std = t_production_std * atoms_to_grams
         g_per_year_std = g_per_s_std * 86400 * 365.25
 
-        print(f"\nTritium Production:")
+        print(f"\nTritium Production ({tally_source}):")
         print(f"  Per Second: {g_per_s:.6e} ± {g_per_s_std:.6e} g/s")
         print(f"  Per Year:   {g_per_year:.6e} ± {g_per_year_std:.6e} g/year")
 
         # Also print TBR for reference
         print(f"\nTritium Breeding Ratio (TBR):")
         print(f"  {tritium_per_source:.6f} ± {tritium_per_source_std:.6f} T atoms/source neutron")
+
+        # Report surface currents if available
+        try:
+            calandria_tally = sp.get_tally(name='tritium_calandria_outer_current_total')
+            calandria_current = calandria_tally.mean[0, 0, 0]
+            calandria_current_std = calandria_tally.std_dev[0, 0, 0]
+
+            pt_tally = sp.get_tally(name='tritium_pt_inner_current_total')
+            pt_current = pt_tally.mean[0, 0, 0]
+            pt_current_std = pt_tally.std_dev[0, 0, 0]
+
+            print(f"\nSurface Currents (Tritium Breeder Assembly):")
+            print(f"  Calandria Outer (from moderator): {calandria_current:.6e} ± {calandria_current_std:.6e} n/source")
+            print(f"  Pressure Tube Inner (from PT):    {pt_current:.6e} ± {pt_current_std:.6e} n/source")
+        except:
+            pass  # Surface tallies not available
 
     except Exception as e:
         print(f"\n  Warning: Could not calculate tritium production: {e}")
@@ -146,7 +170,7 @@ def run_simulation():
     os.chdir(sim_dir)
 
     try:
-        openmc.run(geometry_debug=True)
+        openmc.run(geometry_debug=False)
     finally:
         # Return to original directory
         os.chdir(original_dir)

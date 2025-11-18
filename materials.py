@@ -308,6 +308,26 @@ def make_materials():
     candu_fuel_gap.set_density('g/cm3', 0.00014)
     materials_list.append(candu_fuel_gap)
 
+    # ====== TRITIUM BREEDER ASSEMBLY MATERIALS ======
+    # Grade 7 Titanium (Ti-0.2Pd) for pressure tube and coolant tube walls
+    ti_grade7 = openmc.Material(name='ti_grade7')
+    ti_grade7.set_density('g/cm3', 4.51)
+    ti_grade7.add_element('Ti', 99.5, percent_type='wo')
+    ti_grade7.add_element('Pd', 0.2, percent_type='wo')
+    ti_grade7.add_element('O', 0.15, percent_type='wo')
+    ti_grade7.add_element('Fe', 0.10, percent_type='wo')
+    ti_grade7.add_element('N', 0.02, percent_type='wo')
+    ti_grade7.add_element('C', 0.03, percent_type='wo')
+    ti_grade7.temperature = 544.16
+    materials_list.append(ti_grade7)
+
+    # Vacuum gap (very low density hydrogen)
+    vacuum_gap = openmc.Material(name='vacuum_gap')
+    vacuum_gap.add_element('H', 1.0)
+    vacuum_gap.set_density('g/cm3', 1e-10)
+    vacuum_gap.temperature = 298.15
+    materials_list.append(vacuum_gap)
+
     # Create materials collection
     materials = openmc.Materials(materials_list)
 

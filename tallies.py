@@ -1,6 +1,6 @@
 """
 Tallies for PWR Fusion Breeder Reactor Analysis
-Modified to include surface current tallies
+Modified for tritium breeder assembly tallies
 """
 import openmc
 import numpy as np
@@ -73,8 +73,247 @@ def create_normalization_tallies():
     return tallies
 
 
-def create_full_reactor_mesh_tallies():
-    """Create full reactor mesh tallies: total, thermal, epithermal, and fast flux."""
+def create_tritium_breeder_surface_tallies(geometry, surfaces_dict):
+    """Create surface tallies for tritium breeder assembly.
+
+    Creates:
+    1. Surface tally on calandria outer surface (neutrons from moderator entering)
+    2. Surface tally on pressure tube inner surface (neutrons from pressure tube entering breeder)
+    """
+    tallies = openmc.Tallies()
+
+    # Get tritium breeder info
+    tritium_info = surfaces_dict.get('tritium_info')
+    if tritium_info is None:
+        print("\nNo tritium breeder assemblies found in geometry")
+        return tallies
+
+    # Get cells and surfaces
+    cells_dict = tritium_info['cells_dict']
+    surf_dict = tritium_info['surfaces_dict']
+
+    # Get the specific cells we need
+    moderator_cell = cells_dict['moderator']
+    pressure_tube_cell = cells_dict['pressure_tube']
+
+    # Get surfaces
+    calandria_outer = surf_dict['calandria_outer']
+    pt_inner = surf_dict['pt_inner']
+
+    # Energy filters
+    thermal_filter = openmc.EnergyFilter([0.0, inputs['thermal_cutoff']])
+    epithermal_filter = openmc.EnergyFilter([inputs['thermal_cutoff'], inputs['epithermal_cutoff']])
+    fast_filter = openmc.EnergyFilter([inputs['epithermal_cutoff'], inputs['fast_cutoff']])
+    log_1001_filter = openmc.EnergyFilter(inputs['log_1001_bins'])
+
+    # 1. Calandria outer surface - neutrons from moderator entering
+    # We use CellFromFilter to get only neutrons coming FROM the moderator cell
+    calandria_surf_filter = openmc.SurfaceFilter(calandria_outer)
+    moderator_from_filter = openmc.CellFromFilter(moderator_cell)
+
+    # Total current from moderator into calandria
+    calandria_total = openmc.Tally(name='tritium_calandria_outer_current_total')
+    calandria_total.filters = [calandria_surf_filter, moderator_from_filter]
+    calandria_total.scores = ['current']
+    tallies.append(calandria_total)
+
+    # Thermal current
+    calandria_thermal = openmc.Tally(name='tritium_calandria_outer_current_thermal')
+    calandria_thermal.filters = [calandria_surf_filter, moderator_from_filter, thermal_filter]
+    calandria_thermal.scores = ['current']
+    tallies.append(calandria_thermal)
+
+    # Epithermal current
+    calandria_epithermal = openmc.Tally(name='tritium_calandria_outer_current_epithermal')
+    calandria_epithermal.filters = [calandria_surf_filter, moderator_from_filter, epithermal_filter]
+    calandria_epithermal.scores = ['current']
+    tallies.append(calandria_epithermal)
+
+    # Fast current
+    calandria_fast = openmc.Tally(name='tritium_calandria_outer_current_fast')
+    calandria_fast.filters = [calandria_surf_filter, moderator_from_filter, fast_filter]
+    calandria_fast.scores = ['current']
+    tallies.append(calandria_fast)
+
+    # LOG_1001 current spectrum
+    calandria_log1001 = openmc.Tally(name='tritium_calandria_outer_current_log1001')
+    calandria_log1001.filters = [calandria_surf_filter, moderator_from_filter, log_1001_filter]
+    calandria_log1001.scores = ['current']
+    tallies.append(calandria_log1001)
+
+    # 2. Pressure tube inner surface - neutrons from pressure tube entering breeder
+    # We use CellFromFilter to get only neutrons coming FROM the pressure tube cell
+    pt_surf_filter = openmc.SurfaceFilter(pt_inner)
+    pt_from_filter = openmc.CellFromFilter(pressure_tube_cell)
+
+    # Total current from pressure tube into breeder
+    pt_total = openmc.Tally(name='tritium_pt_inner_current_total')
+    pt_total.filters = [pt_surf_filter, pt_from_filter]
+    pt_total.scores = ['current']
+    tallies.append(pt_total)
+
+    # Thermal current
+    pt_thermal = openmc.Tally(name='tritium_pt_inner_current_thermal')
+    pt_thermal.filters = [pt_surf_filter, pt_from_filter, thermal_filter]
+    pt_thermal.scores = ['current']
+    tallies.append(pt_thermal)
+
+    # Epithermal current
+    pt_epithermal = openmc.Tally(name='tritium_pt_inner_current_epithermal')
+    pt_epithermal.filters = [pt_surf_filter, pt_from_filter, epithermal_filter]
+    pt_epithermal.scores = ['current']
+    tallies.append(pt_epithermal)
+
+    # Fast current
+    pt_fast = openmc.Tally(name='tritium_pt_inner_current_fast')
+    pt_fast.filters = [pt_surf_filter, pt_from_filter, fast_filter]
+    pt_fast.scores = ['current']
+    tallies.append(pt_fast)
+
+    # LOG_1001 current spectrum
+    pt_log1001 = openmc.Tally(name='tritium_pt_inner_current_log1001')
+    pt_log1001.filters = [pt_surf_filter, pt_from_filter, log_1001_filter]
+    pt_log1001.scores = ['current']
+    tallies.append(pt_log1001)
+
+    print("\nCreated tritium breeder surface tallies:")
+    print("  - Calandria outer surface: Total, Thermal, Epithermal, Fast, LOG_1001 (from moderator)")
+    print("  - Pressure tube inner surface: Total, Thermal, Epithermal, Fast, LOG_1001 (from pressure tube)")
+    print(f"  Total: {len(tallies)} surface tallies")
+
+    return tallies
+
+
+def create_tritium_breeding_tally(geometry, surfaces_dict):
+    """Create tritium breeding tally for the tritium breeder assembly.
+
+    This tallies tritium production in the breeding region (breeder material + coolant).
+    """
+    tallies = openmc.Tallies()
+
+    # Get tritium breeder info
+    tritium_info = surfaces_dict.get('tritium_info')
+    if tritium_info is None:
+        print("\nNo tritium breeder assemblies found in geometry")
+        return tallies
+
+    # Find all cells with names matching the tritium breeder pattern
+    # We want: tritium_breeder_material, tritium_breeder_coolant_inner, tritium_breeder_coolant_wall
+    tritium_cells = []
+    for cell in geometry.get_all_cells().values():
+        if cell.name in ['tritium_breeder_material', 'tritium_breeder_coolant_inner', 'tritium_breeder_coolant_wall']:
+            tritium_cells.append(cell)
+
+    if not tritium_cells:
+        print("\nWarning: No tritium breeder cells found in geometry")
+        return tallies
+
+    # Create cell filter for all tritium breeder cells (breeder + coolant)
+    tritium_filter = openmc.CellFilter(tritium_cells)
+
+    # Create tritium production tally
+    # Using (n,Xt) which captures all tritium production reactions:
+    # - Li-6 (n,t) He-4
+    # - Li-7 (n,n't) He-4
+    tbr_tally = openmc.Tally(name='tritium_breeder_production')
+    tbr_tally.filters = [tritium_filter]
+    tbr_tally.scores = ['(n,Xt)']  # Total tritium production
+    tallies.append(tbr_tally)
+
+    # Also create separate tallies for Li-6 and Li-7 contributions
+    # Li-6 contribution
+    tbr_li6_tally = openmc.Tally(name='tritium_breeder_production_li6')
+    tbr_li6_tally.filters = [tritium_filter]
+    tbr_li6_tally.scores = ['(n,Xt)']
+    tbr_li6_tally.nuclides = ['Li6']
+    tallies.append(tbr_li6_tally)
+
+    # Li-7 contribution
+    tbr_li7_tally = openmc.Tally(name='tritium_breeder_production_li7')
+    tbr_li7_tally.filters = [tritium_filter]
+    tbr_li7_tally.scores = ['(n,Xt)']
+    tbr_li7_tally.nuclides = ['Li7']
+    tallies.append(tbr_li7_tally)
+
+    print("\nCreated tritium breeder production tallies:")
+    print(f"  - Total tritium production (in {len(tritium_cells)} cells)")
+    print("  - Li-6 contribution")
+    print("  - Li-7 contribution")
+
+    return tallies
+
+
+def create_tritium_breeder_flux_tallies(geometry, surfaces_dict):
+    """Create flux tallies for the tritium breeder assembly.
+
+    This tallies neutron flux in the breeding region with energy discretization.
+    """
+    tallies = openmc.Tallies()
+
+    # Get tritium breeder info
+    tritium_info = surfaces_dict.get('tritium_info')
+    if tritium_info is None:
+        print("\nNo tritium breeder assemblies found in geometry")
+        return tallies
+
+    # Find all cells with names matching the tritium breeder pattern
+    tritium_cells = []
+    for cell in geometry.get_all_cells().values():
+        if cell.name in ['tritium_breeder_material', 'tritium_breeder_coolant_inner', 'tritium_breeder_coolant_wall']:
+            tritium_cells.append(cell)
+
+    if not tritium_cells:
+        print("\nWarning: No tritium breeder cells found in geometry")
+        return tallies
+
+    # Create cell filter for all tritium breeder cells
+    tritium_filter = openmc.CellFilter(tritium_cells)
+
+    # Energy filters
+    thermal_filter = openmc.EnergyFilter([0.0, inputs['thermal_cutoff']])
+    epithermal_filter = openmc.EnergyFilter([inputs['thermal_cutoff'], inputs['epithermal_cutoff']])
+    fast_filter = openmc.EnergyFilter([inputs['epithermal_cutoff'], inputs['fast_cutoff']])
+    log_1001_filter = openmc.EnergyFilter(inputs['log_1001_bins'])
+
+    # Total flux
+    total_flux = openmc.Tally(name='tritium_breeder_flux_total')
+    total_flux.filters = [tritium_filter]
+    total_flux.scores = ['flux']
+    tallies.append(total_flux)
+
+    # Thermal flux
+    thermal_flux = openmc.Tally(name='tritium_breeder_flux_thermal')
+    thermal_flux.filters = [tritium_filter, thermal_filter]
+    thermal_flux.scores = ['flux']
+    tallies.append(thermal_flux)
+
+    # Epithermal flux
+    epithermal_flux = openmc.Tally(name='tritium_breeder_flux_epithermal')
+    epithermal_flux.filters = [tritium_filter, epithermal_filter]
+    epithermal_flux.scores = ['flux']
+    tallies.append(epithermal_flux)
+
+    # Fast flux
+    fast_flux = openmc.Tally(name='tritium_breeder_flux_fast')
+    fast_flux.filters = [tritium_filter, fast_filter]
+    fast_flux.scores = ['flux']
+    tallies.append(fast_flux)
+
+    # LOG_1001 flux spectrum
+    log1001_flux = openmc.Tally(name='tritium_breeder_flux_log1001')
+    log1001_flux.filters = [tritium_filter, log_1001_filter]
+    log1001_flux.scores = ['flux']
+    tallies.append(log1001_flux)
+
+    print("\nCreated tritium breeder flux tallies:")
+    print(f"  - Total, Thermal, Epithermal, Fast flux (in {len(tritium_cells)} cells)")
+    print(f"  - LOG_1001 energy spectrum ({len(inputs['log_1001_bins'])-1} bins)")
+
+    return tallies
+
+
+def create_core_mesh_tallies():
+    """Create full core mesh tallies for radial flux profiles."""
     tallies = openmc.Tallies()
     derived = get_derived_dimensions()
 
@@ -92,294 +331,118 @@ def create_full_reactor_mesh_tallies():
     fast_filter = openmc.EnergyFilter([inputs['epithermal_cutoff'], inputs['fast_cutoff']])
 
     # 1. Total flux (all energies)
-    total_flux_tally = openmc.Tally(name='mesh_total_flux')
+    total_flux_tally = openmc.Tally(name='core_mesh_total_flux')
     total_flux_tally.filters = [mesh_filter]
     total_flux_tally.scores = ['flux']
     tallies.append(total_flux_tally)
 
     # 2. Thermal flux
-    thermal_flux_tally = openmc.Tally(name='mesh_thermal_flux')
+    thermal_flux_tally = openmc.Tally(name='core_mesh_thermal_flux')
     thermal_flux_tally.filters = [mesh_filter, thermal_filter]
     thermal_flux_tally.scores = ['flux']
     tallies.append(thermal_flux_tally)
 
     # 3. Epithermal flux
-    epithermal_flux_tally = openmc.Tally(name='mesh_epithermal_flux')
+    epithermal_flux_tally = openmc.Tally(name='core_mesh_epithermal_flux')
     epithermal_flux_tally.filters = [mesh_filter, epithermal_filter]
     epithermal_flux_tally.scores = ['flux']
     tallies.append(epithermal_flux_tally)
 
     # 4. Fast flux
-    fast_flux_tally = openmc.Tally(name='mesh_fast_flux')
+    fast_flux_tally = openmc.Tally(name='core_mesh_fast_flux')
     fast_flux_tally.filters = [mesh_filter, fast_filter]
     fast_flux_tally.scores = ['flux']
     tallies.append(fast_flux_tally)
 
-    print("\nCreated full reactor mesh tallies:")
-    print("  - Total flux")
-    print("  - Thermal flux (0 to 0.625 eV)")
-    print("  - Epithermal flux (0.625 eV to 100 keV)")
-    print("  - Fast flux (100 keV to 10 MeV)")
+    print("\nCreated core mesh tallies:")
+    print("  - Total, Thermal, Epithermal, Fast flux")
     print(f"  Mesh: {inputs['n_radial_bins']} x {inputs['n_radial_bins']} x {inputs['n_axial_bins']}")
 
     return tallies
 
 
-def create_cell_based_energy_tallies(geometry):
-    """Create cell-based energy-discretized tallies for key regions."""
+def create_tritium_assembly_mesh_tally():
+    """Create 3x3 assembly mesh centered on tritium breeder (50x50x1)."""
     tallies = openmc.Tallies()
     derived = get_derived_dimensions()
 
-    # Find the required cells
-    outer_tank_cell = None
-    rpv_1_cell = None
-    rpv_2_cell = None
-    lithium_blanket_cell = None
+    # Get assembly width
+    assembly_width = derived['assembly_width']  # CANDU assembly pitch
 
-    for cell in geometry.root_universe.cells.values():
-        if cell.name == 'outer_tank':
-            outer_tank_cell = cell
-        elif cell.name == 'rpv_layer_1':
-            rpv_1_cell = cell
-        elif cell.name == 'rpv_layer_2':
-            rpv_2_cell = cell
-        elif cell.name == 'breeder_blanket':
-            lithium_blanket_cell = cell
+    # Find T_1 position in lattice
+    if inputs['assembly_type'] == 'candu':
+        core_lattice = inputs['candu_lattice']
+    else:
+        core_lattice = inputs['ap1000_lattice']
 
-    # Check that all cells were found
-    missing_cells = []
-    if outer_tank_cell is None:
-        missing_cells.append('outer_tank')
-    if rpv_1_cell is None:
-        missing_cells.append('rpv_layer_1')
-    if rpv_2_cell is None:
-        missing_cells.append('rpv_layer_2')
-    if lithium_blanket_cell is None:
-        missing_cells.append('breeder_blanket')
+    n_rows = len(core_lattice)
+    n_cols = len(core_lattice[0])
 
-    if missing_cells:
-        raise ValueError(f"Could not find cells: {', '.join(missing_cells)}")
-
-    # Create cell filters
-    outer_tank_filter = openmc.CellFilter([outer_tank_cell])
-    rpv_1_filter = openmc.CellFilter([rpv_1_cell])
-    rpv_2_filter = openmc.CellFilter([rpv_2_cell])
-    lithium_blanket_filter = openmc.CellFilter([lithium_blanket_cell])
-
-    # Define energy filters
-    thermal_filter = openmc.EnergyFilter([0.0, inputs['thermal_cutoff']])
-    epithermal_filter = openmc.EnergyFilter([inputs['thermal_cutoff'], inputs['epithermal_cutoff']])
-    fast_filter = openmc.EnergyFilter([inputs['epithermal_cutoff'], inputs['fast_cutoff']])
-    log_1001_filter = openmc.EnergyFilter(inputs['log_1001_bins'])
-
-    # Find moderator region cell if enabled
-    moderator_filter = None
-    if inputs['enable_moderator_region']:
-        moderator_cell = None
-        for cell in geometry.root_universe.cells.values():
-            if cell.name == 'moderator_region':
-                moderator_cell = cell
+    # Find T_1 position
+    t1_row, t1_col = None, None
+    for row_idx, row in enumerate(core_lattice):
+        for col_idx, symbol in enumerate(row):
+            if symbol == 'T_1' or symbol == 'T':
+                t1_row, t1_col = row_idx, col_idx
                 break
+        if t1_row is not None:
+            break
 
-        if moderator_cell is None:
-            raise ValueError("Could not find 'moderator_region' cell in geometry")
+    # Calculate T_1 center position (lattice is centered at origin)
+    if t1_row is not None and t1_col is not None:
+        # Position relative to center of lattice
+        x_center = (t1_col - n_cols/2 + 0.5) * assembly_width
+        y_center = (t1_row - n_rows/2 + 0.5) * assembly_width
+    else:
+        # Default to origin if T_1 not found
+        x_center, y_center = 0.0, 0.0
+        print("  Warning: T_1 not found in lattice, centering mesh at origin")
 
-        moderator_filter = openmc.CellFilter([moderator_cell])
+    # 3x3 assemblies centered on T_1
+    mesh_width = 3 * assembly_width
 
-    # Dictionary mapping cell filters to names
-    regions = {
-        'outer_tank': outer_tank_filter,
-        'rpv_inner': rpv_1_filter,
-        'rpv_outer': rpv_2_filter,
-        'lithium_blanket': lithium_blanket_filter
-    }
+    # Create mesh: 50x50x1
+    mesh = openmc.RegularMesh()
+    mesh.dimension = [50, 50, 1]
+    mesh.lower_left = [x_center - mesh_width/2, y_center - mesh_width/2, derived['z_fuel_bottom']]
+    mesh.upper_right = [x_center + mesh_width/2, y_center + mesh_width/2, derived['z_fuel_top']]
 
-    # Add moderator region if enabled
-    if inputs['enable_moderator_region'] and moderator_filter is not None:
-        regions['moderator'] = moderator_filter
-
-    # Create tallies for each region
-    for region_name, cell_filter in regions.items():
-        # LOG_1001 flux
-        log1001_tally = openmc.Tally(name=f'{region_name}_flux_log1001')
-        log1001_tally.filters = [cell_filter, log_1001_filter]
-        log1001_tally.scores = ['flux']
-        tallies.append(log1001_tally)
-
-        # Thermal flux
-        thermal_tally = openmc.Tally(name=f'{region_name}_flux_thermal')
-        thermal_tally.filters = [cell_filter, thermal_filter]
-        thermal_tally.scores = ['flux']
-        tallies.append(thermal_tally)
-
-        # Epithermal flux
-        epithermal_tally = openmc.Tally(name=f'{region_name}_flux_epithermal')
-        epithermal_tally.filters = [cell_filter, epithermal_filter]
-        epithermal_tally.scores = ['flux']
-        tallies.append(epithermal_tally)
-
-        # Fast flux
-        fast_tally = openmc.Tally(name=f'{region_name}_flux_fast')
-        fast_tally.filters = [cell_filter, fast_filter]
-        fast_tally.scores = ['flux']
-        tallies.append(fast_tally)
-
-    print("\nCreated cell-based energy-discretized tallies:")
-    region_list = "Outer Tank, RPV Inner, RPV Outer"
-    if inputs['enable_moderator_region']:
-        region_list += ", Moderator"
-    region_list += ", Lithium Blanket"
-    print(f"  Regions: {region_list}")
-    print("  For each region: LOG_1001, Thermal, Epithermal, Fast flux")
-    print(f"  Total: {len(tallies)} tallies")
-
-    return tallies
-
-
-def create_surface_current_tallies(geometry, surfaces_dict):
-
-    tallies = openmc.Tallies()
-    derived = get_derived_dimensions()
-
-    # Use the ACTUAL surfaces from geometry
-    surfaces = {
-        'core': surfaces_dict['cyl_core'],
-        'outer_tank': surfaces_dict['cyl_outer_tank'],
-        'rpv_inner': surfaces_dict['cyl_rpv_1'],
-        'rpv_outer': surfaces_dict['cyl_rpv_2'],
-        'lithium': surfaces_dict['cyl_lithium']
-    }
-
-    # Add moderator region surfaces if enabled
-    if inputs['enable_moderator_region']:
-        if 'cyl_moderator' in surfaces_dict:
-            surfaces['moderator'] = surfaces_dict['cyl_moderator']
-        if 'cyl_wall_divider' in surfaces_dict:
-            surfaces['wall_divider'] = surfaces_dict['cyl_wall_divider']
-
-    # Get cells from geometry for directional current tallies
-    # We need to identify which cells are on the "inside" of each surface
-    # to measure only outward current
-    cell_mapping = {}
-    wall_divider_cell = None
-    for cell in geometry.root_universe.cells.values():
-        if cell.name == 'core_region':  # Contains the fuel lattice
-            cell_mapping['core'] = cell
-        elif cell.name == 'outer_tank':
-            cell_mapping['outer_tank'] = cell
-        elif cell.name == 'rpv_layer_1':
-            cell_mapping['rpv_inner'] = cell
-        elif cell.name == 'rpv_layer_2':
-            cell_mapping['rpv_outer'] = cell
-        elif cell.name == 'breeder_blanket':
-            cell_mapping['lithium'] = cell
-        elif inputs['enable_moderator_region']:
-            if cell.name == 'moderator_region':
-                cell_mapping['moderator'] = cell
-            elif cell.name == 'wall_divider':
-                wall_divider_cell = cell  # Store for wall_divider surface
-
-    # For wall_divider surface, outward current is FROM wall_divider cell (inside) going OUT
-    if inputs['enable_moderator_region'] and wall_divider_cell is not None:
-        cell_mapping['wall_divider'] = wall_divider_cell
+    mesh_filter = openmc.MeshFilter(mesh)
 
     # Energy filters
     thermal_filter = openmc.EnergyFilter([0.0, inputs['thermal_cutoff']])
     epithermal_filter = openmc.EnergyFilter([inputs['thermal_cutoff'], inputs['epithermal_cutoff']])
     fast_filter = openmc.EnergyFilter([inputs['epithermal_cutoff'], inputs['fast_cutoff']])
-    log_1001_filter = openmc.EnergyFilter(inputs['log_1001_bins'])
 
-    # Create tallies for each surface
-    for surf_name, surface in surfaces.items():
-        # Create surface filter
-        surf_filter = openmc.SurfaceFilter(surface)
+    # Total flux
+    total_tally = openmc.Tally(name='tritium_assembly_mesh_total')
+    total_tally.filters = [mesh_filter]
+    total_tally.scores = ['flux']
+    tallies.append(total_tally)
 
-        # Create cell from filter for outward current only
-        # This specifies we only want current FROM the inner cell going OUT
-        if surf_name in cell_mapping:
-            cellfrom_filter = openmc.CellFromFilter(cell_mapping[surf_name])
+    # Thermal flux
+    thermal_tally = openmc.Tally(name='tritium_assembly_mesh_thermal')
+    thermal_tally.filters = [mesh_filter, thermal_filter]
+    thermal_tally.scores = ['flux']
+    tallies.append(thermal_tally)
 
-            # LOG_1001 current (OUTWARD ONLY)
-            log1001_tally = openmc.Tally(name=f'surface_{surf_name}_current_log1001')
-            log1001_tally.filters = [surf_filter, cellfrom_filter, log_1001_filter]
-            log1001_tally.scores = ['current']  # With cellfrom filter, this gives partial current
-            tallies.append(log1001_tally)
+    # Epithermal flux
+    epithermal_tally = openmc.Tally(name='tritium_assembly_mesh_epithermal')
+    epithermal_tally.filters = [mesh_filter, epithermal_filter]
+    epithermal_tally.scores = ['flux']
+    tallies.append(epithermal_tally)
 
-            # Thermal current (OUTWARD ONLY)
-            thermal_tally = openmc.Tally(name=f'surface_{surf_name}_current_thermal')
-            thermal_tally.filters = [surf_filter, cellfrom_filter, thermal_filter]
-            thermal_tally.scores = ['current']
-            tallies.append(thermal_tally)
+    # Fast flux
+    fast_tally = openmc.Tally(name='tritium_assembly_mesh_fast')
+    fast_tally.filters = [mesh_filter, fast_filter]
+    fast_tally.scores = ['flux']
+    tallies.append(fast_tally)
 
-            # Epithermal current (OUTWARD ONLY)
-            epithermal_tally = openmc.Tally(name=f'surface_{surf_name}_current_epithermal')
-            epithermal_tally.filters = [surf_filter, cellfrom_filter, epithermal_filter]
-            epithermal_tally.scores = ['current']
-            tallies.append(epithermal_tally)
-
-            # Fast current (OUTWARD ONLY)
-            fast_tally = openmc.Tally(name=f'surface_{surf_name}_current_fast')
-            fast_tally.filters = [surf_filter, cellfrom_filter, fast_filter]
-            fast_tally.scores = ['current']
-            tallies.append(fast_tally)
-
-    print("\nCreated surface current tallies:")
-    surface_list = "Core, Outer Tank, RPV Inner, RPV Outer"
-    if inputs['enable_moderator_region']:
-        surface_list += ", Moderator, Wall Divider"
-    surface_list += ", Lithium"
-    print(f"  Surfaces: {surface_list}")
-    print("  For each surface: LOG_1001, Thermal, Epithermal, Fast current (OUTWARD ONLY)")
-    print(f"  Total: {len(tallies)} surface tallies")
-
-    return tallies
-
-
-def create_tritium_breeding_tally(geometry):
-    """Create tritium breeding ratio tallies."""
-    tallies = openmc.Tallies()
-
-    # Find the breeder blanket cell
-    lithium_cell = None
-    for cell in geometry.root_universe.cells.values():
-        if cell.name == 'breeder_blanket':
-            lithium_cell = cell
-            break
-
-    if lithium_cell is None:
-        raise ValueError("Could not find 'breeder_blanket' cell in geometry")
-
-    # Create cell filter
-    lithium_filter = openmc.CellFilter([lithium_cell])
-
-    # Create tritium production tally
-    # Using (n,Xt) which captures all tritium production reactions:
-    # - Li-6 (n,t) He-4
-    # - Li-7 (n,n't) He-4
-    tbr_tally = openmc.Tally(name='tritium_breeding_ratio')
-    tbr_tally.filters = [lithium_filter]
-    tbr_tally.scores = ['(n,Xt)']  # Total tritium production
-    tallies.append(tbr_tally)
-
-    # Also create separate tallies for Li-6 and Li-7 contributions
-    # Li-6 contribution
-    tbr_li6_tally = openmc.Tally(name='tritium_breeding_li6')
-    tbr_li6_tally.filters = [lithium_filter]
-    tbr_li6_tally.scores = ['(n,Xt)']
-    tbr_li6_tally.nuclides = ['Li6']
-    tallies.append(tbr_li6_tally)
-
-    # Li-7 contribution
-    tbr_li7_tally = openmc.Tally(name='tritium_breeding_li7')
-    tbr_li7_tally.filters = [lithium_filter]
-    tbr_li7_tally.scores = ['(n,Xt)']
-    tbr_li7_tally.nuclides = ['Li7']
-    tallies.append(tbr_li7_tally)
-
-    print("\nCreated tritium breeding tallies:")
-    print("  - Total TBR (all reactions)")
-    print("  - Li-6 contribution")
-    print("  - Li-7 contribution")
+    print("\nCreated tritium assembly mesh tallies:")
+    print(f"  - 3x3 assembly region ({mesh_width:.1f} cm x {mesh_width:.1f} cm)")
+    print(f"  - Centered at T_1 position: ({x_center:.1f}, {y_center:.1f}) cm")
+    print(f"  - Mesh: 50 x 50 x 1")
+    print(f"  - Total, Thermal, Epithermal, Fast flux")
 
     return tallies
 
@@ -400,21 +463,25 @@ def create_all_tallies(geometry, surfaces_dict):
     norm_tallies = create_normalization_tallies()
     all_tallies.extend(norm_tallies)
 
-    # 2. Full reactor mesh tallies
-    mesh_tallies = create_full_reactor_mesh_tallies()
-    all_tallies.extend(mesh_tallies)
-
-    # 3. Cell-based energy-discretized tallies
-    cell_tallies = create_cell_based_energy_tallies(geometry)
-    all_tallies.extend(cell_tallies)
-
-    # 4. Surface current tallies (NEW)
-    surface_tallies = create_surface_current_tallies(geometry, surfaces_dict)
+    # 2. Tritium breeder surface tallies
+    surface_tallies = create_tritium_breeder_surface_tallies(geometry, surfaces_dict)
     all_tallies.extend(surface_tallies)
 
-    # 5. Tritium breeding tallies
-    tbr_tallies = create_tritium_breeding_tally(geometry)
+    # 3. Tritium breeding tallies
+    tbr_tallies = create_tritium_breeding_tally(geometry, surfaces_dict)
     all_tallies.extend(tbr_tallies)
+
+    # 4. Tritium breeder flux tallies
+    flux_tallies = create_tritium_breeder_flux_tallies(geometry, surfaces_dict)
+    all_tallies.extend(flux_tallies)
+
+    # 5. Core mesh tallies (for radial plots)
+    core_mesh_tallies = create_core_mesh_tallies()
+    all_tallies.extend(core_mesh_tallies)
+
+    # 6. Tritium assembly mesh tally (3x3 assembly heatmap)
+    assembly_mesh_tallies = create_tritium_assembly_mesh_tally()
+    all_tallies.extend(assembly_mesh_tallies)
 
     print("\n" + "="*60)
     print(f"Total tallies created: {len(all_tallies)}")
@@ -429,9 +496,9 @@ if __name__ == '__main__':
         from geometry import create_core
 
         mat_dict = make_materials()
-        geometry = create_core(mat_dict)
+        geometry, surfaces_dict = create_core(mat_dict)
 
-        tallies = create_all_tallies(geometry)
+        tallies = create_all_tallies(geometry, surfaces_dict)
 
         tallies.export_to_xml()
 
