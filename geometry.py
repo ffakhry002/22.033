@@ -641,7 +641,10 @@ def SFR_tritium_breeder_assembly(mat_dict):
 
 
 def build_SFR_core_lattice(mat_dict, hex_boundary, plane_bottom, plane_top):
-    """Build a hexagonal SFR core lattice.
+    """Build a hexagonal SFR core lattice matching the reference benchmark pattern.
+
+    Uses the exact ring pattern from the European SFR benchmark with mixed transition zones,
+    but keeps the center as tritium breeder instead of fuel.
 
     Returns
     -------
@@ -653,7 +656,7 @@ def build_SFR_core_lattice(mat_dict, hex_boundary, plane_bottom, plane_top):
     # Create assembly types
     inner_fuel = SFR_assembly(mat_dict, 'mox_inner')
     outer_fuel = SFR_assembly(mat_dict, 'mox_outer')
-    reflector = SFR_reflector_assembly(mat_dict)
+    reflector = SFR_reflector_assembly(mat_dict)  # Sodium reflector
 
     # Create sodium-only universe for outer region
     sodium_mod_cell = openmc.Cell(fill=mat_dict['sodium'])
@@ -673,33 +676,78 @@ def build_SFR_core_lattice(mat_dict, hex_boundary, plane_bottom, plane_top):
     core_lattice.outer = sodium_mod_u
     core_lattice.orientation = 'x'
 
-    # Build ring structure based on inputs
-    # Rings from outside to inside: reflector -> outer fuel -> inner fuel -> center (tritium)
-    n_reflector = inputs['sfr_reflector_rings']
-    n_outer_fuel = inputs['sfr_outer_fuel_rings']
-    n_inner_fuel = inputs['sfr_inner_fuel_rings']
+    # =========================================================================
+    # EXACT REFERENCE PATTERN (from European SFR benchmark)
+    # =========================================================================
+    # Reference has 17 rings total with mixed transition zones
+    # Pattern notation: R=reflector, O=outer fuel, I=inner fuel, T=tritium
 
     lattice_rings = []
 
-    # Reflector rings (outermost)
-    for ring_idx in range(n_reflector):
-        ring_number = n_reflector + n_outer_fuel + n_inner_fuel - ring_idx
-        n_assemblies = 6 * ring_number
-        lattice_rings.append([reflector] * n_assemblies)
+    # Ring 1 (96 assemblies): ALL REFLECTOR
+    lattice_rings.append([reflector] * 96)
 
-    # Outer fuel rings
-    for ring_idx in range(n_outer_fuel):
-        ring_number = n_outer_fuel + n_inner_fuel - ring_idx
-        n_assemblies = 6 * ring_number
-        lattice_rings.append([outer_fuel] * n_assemblies)
+    # Ring 2 (90 assemblies): ALL REFLECTOR
+    lattice_rings.append([reflector] * 90)
 
-    # Inner fuel rings
-    for ring_idx in range(n_inner_fuel):
-        ring_number = n_inner_fuel - ring_idx
-        n_assemblies = 6 * ring_number
-        lattice_rings.append([inner_fuel] * n_assemblies)
+    # Ring 3 (84 assemblies): ALL REFLECTOR
+    lattice_rings.append([reflector] * 84)
 
-    # Center assembly (tritium breeder)
+    # Ring 4 (78 assemblies): MIXED - [5R, 4O, 4R] × 6-fold symmetry
+    ring4 = []
+    for _ in range(6):
+        ring4.extend([reflector] * 5)
+        ring4.extend([outer_fuel] * 4)
+        ring4.extend([reflector] * 4)
+    lattice_rings.append(ring4)
+
+    # Ring 5 (72 assemblies): MIXED - [1R, 11O] × 6-fold symmetry
+    ring5 = []
+    for _ in range(6):
+        ring5.extend([reflector] * 1)
+        ring5.extend([outer_fuel] * 11)
+    lattice_rings.append(ring5)
+
+    # Ring 6 (66 assemblies): ALL OUTER FUEL
+    lattice_rings.append([outer_fuel] * 66)
+
+    # Ring 7 (60 assemblies): ALL OUTER FUEL
+    lattice_rings.append([outer_fuel] * 60)
+
+    # Ring 8 (54 assemblies): MIXED - [2O, 6I, 1O] × 6-fold symmetry
+    ring8 = []
+    for _ in range(6):
+        ring8.extend([outer_fuel] * 2)
+        ring8.extend([inner_fuel] * 6)
+        ring8.extend([outer_fuel] * 1)
+    lattice_rings.append(ring8)
+
+    # Ring 9 (48 assemblies): ALL INNER FUEL
+    lattice_rings.append([inner_fuel] * 48)
+
+    # Ring 10 (42 assemblies): ALL INNER FUEL
+    lattice_rings.append([inner_fuel] * 42)
+
+    # Ring 11 (36 assemblies): ALL INNER FUEL
+    lattice_rings.append([inner_fuel] * 36)
+
+    # Ring 12 (30 assemblies): ALL INNER FUEL
+    lattice_rings.append([inner_fuel] * 30)
+
+    # Ring 13 (24 assemblies): ALL INNER FUEL
+    lattice_rings.append([inner_fuel] * 24)
+
+    # Ring 14 (18 assemblies): ALL INNER FUEL
+    lattice_rings.append([inner_fuel] * 18)
+
+    # Ring 15 (12 assemblies): ALL INNER FUEL
+    lattice_rings.append([inner_fuel] * 12)
+
+    # Ring 16 (6 assemblies): ALL INNER FUEL
+    lattice_rings.append([inner_fuel] * 6)
+
+    # Ring 17 (1 assembly): CENTER - TRITIUM BREEDER
+    # (Modified from reference which has inner fuel here)
     lattice_rings.append([tritium_assembly])
 
     core_lattice.universes = lattice_rings

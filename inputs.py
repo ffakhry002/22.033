@@ -136,10 +136,17 @@ inputs = {
     'sfr_assembly_edge': 12.1705,  # Assembly hexagonal edge length (cm)
 
     # SFR core lattice (hexagonal rings)
-    # Number of assemblies per ring: [96, 90, 84, ...] for reflector, outer fuel, inner fuel
-    'sfr_reflector_rings': 3,     # Number of reflector rings (outermost)
-    'sfr_outer_fuel_rings': 3,    # Number of outer fuel rings
-    'sfr_inner_fuel_rings': 9,    # Number of inner fuel rings
+    # NOTE: The exact reference pattern is now HARD-CODED in build_SFR_core_lattice()
+    # These parameters are kept for documentation but are NOT used in geometry creation
+    # The implementation uses the exact European SFR benchmark pattern with:
+    #   - 330 sodium reflector assemblies (rings 1-3, plus mixed in rings 4-5)
+    #   - 234 outer MOX fuel assemblies (higher Pu, rings 4-8 mixed)
+    #   - 252 inner MOX fuel assemblies (lower Pu, rings 8-16 mixed)
+    #   - 1 tritium breeder assembly (center, modified from reference)
+    #   - Total: 817 assemblies in 17 rings
+    'sfr_reflector_rings': 4,     # [DOCUMENTATION ONLY - not used]
+    'sfr_outer_fuel_rings': 3,    # [DOCUMENTATION ONLY - not used]
+    'sfr_inner_fuel_rings': 9,    # [DOCUMENTATION ONLY - not used]
 
     # SFR assembly pitch (distance between assembly centers)
     'sfr_assembly_pitch': 21.08,  # cm
