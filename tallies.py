@@ -421,6 +421,10 @@ def create_tritium_assembly_mesh_tally(energy_filters):
     # Calculate T_1 center position (lattice is centered at origin)
     if t1_row is not None and t1_col is not None:
         # Position relative to center of lattice
+        # In OpenMC RectLattice: universe[i][j] where i=row (Y), j=col (X)
+        # lattice.lower_left sets the corner, and universe[0][0] starts there
+        # Since lower_left = (-n_cols*w/2, -n_rows*w/2), universe[0][0] is at bottom-left
+        # Therefore: Y increases with row index (row 0 = bottom)
         x_center = (t1_col - n_cols/2 + 0.5) * assembly_width
         y_center = (t1_row - n_rows/2 + 0.5) * assembly_width
     else:
@@ -431,9 +435,9 @@ def create_tritium_assembly_mesh_tally(energy_filters):
     # 3x3 assemblies centered on T_1
     mesh_width = 3 * assembly_width
 
-    # Create mesh: 50x50x1
+    # Create mesh: 300x300x1
     assembly_mesh = openmc.RegularMesh()
-    assembly_mesh.dimension = [50, 50, 1]
+    assembly_mesh.dimension = [300, 300, 1]
     assembly_mesh.lower_left = [x_center - mesh_width/2, y_center - mesh_width/2, derived['z_fuel_bottom']]
     assembly_mesh.upper_right = [x_center + mesh_width/2, y_center + mesh_width/2, derived['z_fuel_top']]
 
@@ -471,7 +475,7 @@ def create_tritium_assembly_mesh_tally(energy_filters):
     print("\nCreated tritium assembly mesh tallies:")
     print(f"  - 3x3 assembly region ({mesh_width:.1f} cm x {mesh_width:.1f} cm)")
     print(f"  - Centered at T_1 position: ({x_center:.1f}, {y_center:.1f}) cm")
-    print(f"  - Mesh: 50 x 50 x 1")
+    print(f"  - Mesh: 300 x 300 x 1 (resolution: {mesh_width/300:.3f} cm/bin)")
     print(f"  - Total, Thermal, Epithermal, Fast flux")
 
     return tallies

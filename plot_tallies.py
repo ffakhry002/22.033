@@ -559,7 +559,7 @@ def plot_tritium_assembly_heatmap(sp, output_dir='tally_figures'):
         if t1_row is not None:
             break
 
-    # Calculate T_1 center position
+    # Calculate T_1 center position (must match tallies.py)
     if t1_row is not None and t1_col is not None:
         x_center = (t1_col - n_cols/2 + 0.5) * assembly_width
         y_center = (t1_row - n_rows/2 + 0.5) * assembly_width
@@ -611,16 +611,8 @@ def plot_tritium_assembly_heatmap(sp, output_dir='tally_figures'):
                 y_asm = y_center + j * assembly_width
                 square = plt.Rectangle((x_asm - assembly_width/2, y_asm - assembly_width/2),
                                       assembly_width, assembly_width,
-                                      fill=False, edgecolor='red', linewidth=2, linestyle='--', alpha=0.6)
+                                      fill=False, edgecolor='white', linewidth=2, linestyle='--', alpha=0.8)
                 ax.add_patch(square)
-
-        # Mark center assembly (T_1)
-        ax.plot(x_center, y_center, 'r*', markersize=15)
-
-        # Add calandria tube circle for center assembly
-        circle = plt.Circle((x_center, y_center), calandria_or, fill=False,
-                           color='white', linestyle='-', linewidth=2, alpha=0.8)
-        ax.add_patch(circle)
 
         ax.set_xlabel('X [cm]', fontsize=12, fontweight='bold')
         ax.set_ylabel('Y [cm]', fontsize=12, fontweight='bold')
