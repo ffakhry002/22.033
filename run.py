@@ -153,22 +153,39 @@ def run_simulation():
     settings.max_particle_events = inputs['max_particle_events']
     settings.run_mode = 'eigenvalue'
 
-    # Source distribution
+    # Source distribution - different for SFR vs CANDU/AP1000
     derived = get_derived_dimensions()
-    source_dist = openmc.stats.Box(
-        [-inputs['r_core'], -inputs['r_core'], derived['z_fuel_bottom']],
-        [inputs['r_core'], inputs['r_core'], derived['z_fuel_top']]
-    )
+
+    if inputs['assembly_type'] == 'sodium':
+        # SFR: Use hexagonal core dimensions
+        core_edge = inputs['sfr_core_edge']
+        source_dist = openmc.stats.Box(
+            [-core_edge, -core_edge, -inputs['sfr_axial_height']],
+            [core_edge, core_edge, inputs['sfr_axial_height']]
+        )
+
+        # Entropy mesh for SFR
+        entropy_mesh = openmc.RegularMesh()
+        entropy_mesh.lower_left = [-core_edge, -core_edge, -inputs['sfr_axial_height']]
+        entropy_mesh.upper_right = [core_edge, core_edge, inputs['sfr_axial_height']]
+        entropy_mesh.dimension = inputs['entropy_mesh_dimension']
+    else:
+        # CANDU/AP1000: Use cylindrical core dimensions
+        source_dist = openmc.stats.Box(
+            [-inputs['r_core'], -inputs['r_core'], derived['z_fuel_bottom']],
+            [inputs['r_core'], inputs['r_core'], derived['z_fuel_top']]
+        )
+
+        # Entropy mesh for CANDU/AP1000
+        entropy_mesh = openmc.RegularMesh()
+        entropy_mesh.lower_left = [-inputs['r_core'], -inputs['r_core'], derived['z_fuel_bottom']]
+        entropy_mesh.upper_right = [inputs['r_core'], inputs['r_core'], derived['z_fuel_top']]
+        entropy_mesh.dimension = inputs['entropy_mesh_dimension']
+
     source = openmc.IndependentSource()
     source.space = source_dist
     source.constraints = {'fissionable': True}  # Use constraints instead of only_fissionable
     settings.source = source
-
-    # Entropy mesh for convergence
-    entropy_mesh = openmc.RegularMesh()
-    entropy_mesh.lower_left = [-inputs['r_core'], -inputs['r_core'], derived['z_fuel_bottom']]
-    entropy_mesh.upper_right = [inputs['r_core'], inputs['r_core'], derived['z_fuel_top']]
-    entropy_mesh.dimension = inputs['entropy_mesh_dimension']
     settings.entropy_mesh = entropy_mesh
     settings.temperature = {'method': 'interpolation'}
 
