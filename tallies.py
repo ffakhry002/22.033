@@ -90,20 +90,26 @@ def create_tritium_breeder_surface_tallies(geometry, surfaces_dict, energy_filte
     # Get tritium breeder info
     tritium_info = surfaces_dict.get('tritium_info')
     if tritium_info is None:
-        print("\nNo tritium breeder assemblies found in geometry")
+        print("\n  Warning: No tritium breeder assemblies found in geometry")
         return tallies
 
     # Get cells and surfaces
-    cells_dict = tritium_info['cells_dict']
-    surf_dict = tritium_info['surfaces_dict']
+    try:
+        cells_dict = tritium_info['cells_dict']
+        surf_dict = tritium_info['surfaces_dict']
 
-    # Get the specific cells we need
-    moderator_cell = cells_dict['moderator']
-    pressure_tube_cell = cells_dict['pressure_tube']
+        # Get the specific cells we need
+        moderator_cell = cells_dict['moderator']
+        pressure_tube_cell = cells_dict['pressure_tube']
 
-    # Get surfaces
-    calandria_outer = surf_dict['calandria_outer']
-    pt_inner = surf_dict['pt_inner']
+        # Get surfaces
+        calandria_outer = surf_dict['calandria_outer']
+        pt_inner = surf_dict['pt_inner']
+    except KeyError as e:
+        print(f"\n  Warning: Could not find required cell or surface in tritium_info: {e}")
+        print(f"  Available cells: {list(cells_dict.keys()) if 'cells_dict' in locals() else 'N/A'}")
+        print(f"  Available surfaces: {list(surf_dict.keys()) if 'surf_dict' in locals() else 'N/A'}")
+        return tallies
 
     # Use pre-created energy filters
     thermal_filter = energy_filters['thermal']
@@ -336,12 +342,12 @@ def create_core_mesh_tallies(energy_filters):
 
     # Create rectangular mesh covering entire reactor geometry
     # Use reasonable size to avoid memory issues (400x400x50 instead of 1000x1000x200)
-    mesh = openmc.RegularMesh()
-    mesh.dimension = [400, 400, 50]
-    mesh.lower_left = [-derived['r_lithium_wall'], -derived['r_lithium_wall'], derived['z_bottom']]
-    mesh.upper_right = [derived['r_lithium_wall'], derived['r_lithium_wall'], derived['z_top']]
+    core_mesh = openmc.RegularMesh()
+    core_mesh.dimension = [400, 400, 50]
+    core_mesh.lower_left = [-derived['r_lithium_wall'], -derived['r_lithium_wall'], derived['z_bottom']]
+    core_mesh.upper_right = [derived['r_lithium_wall'], derived['r_lithium_wall'], derived['z_top']]
 
-    mesh_filter = openmc.MeshFilter(mesh)
+    core_mesh_filter = openmc.MeshFilter(core_mesh)
 
     # Use pre-created energy filters
     thermal_filter = energy_filters['thermal']
@@ -350,25 +356,25 @@ def create_core_mesh_tallies(energy_filters):
 
     # 1. Total flux (all energies)
     total_flux_tally = openmc.Tally(name='core_mesh_total_flux')
-    total_flux_tally.filters = [mesh_filter]
+    total_flux_tally.filters = [core_mesh_filter]
     total_flux_tally.scores = ['flux']
     tallies.append(total_flux_tally)
 
     # 2. Thermal flux
     thermal_flux_tally = openmc.Tally(name='core_mesh_thermal_flux')
-    thermal_flux_tally.filters = [mesh_filter, thermal_filter]
+    thermal_flux_tally.filters = [core_mesh_filter, thermal_filter]
     thermal_flux_tally.scores = ['flux']
     tallies.append(thermal_flux_tally)
 
     # 3. Epithermal flux
     epithermal_flux_tally = openmc.Tally(name='core_mesh_epithermal_flux')
-    epithermal_flux_tally.filters = [mesh_filter, epithermal_filter]
+    epithermal_flux_tally.filters = [core_mesh_filter, epithermal_filter]
     epithermal_flux_tally.scores = ['flux']
     tallies.append(epithermal_flux_tally)
 
     # 4. Fast flux
     fast_flux_tally = openmc.Tally(name='core_mesh_fast_flux')
-    fast_flux_tally.filters = [mesh_filter, fast_filter]
+    fast_flux_tally.filters = [core_mesh_filter, fast_filter]
     fast_flux_tally.scores = ['flux']
     tallies.append(fast_flux_tally)
 
@@ -426,12 +432,12 @@ def create_tritium_assembly_mesh_tally(energy_filters):
     mesh_width = 3 * assembly_width
 
     # Create mesh: 50x50x1
-    mesh = openmc.RegularMesh()
-    mesh.dimension = [50, 50, 1]
-    mesh.lower_left = [x_center - mesh_width/2, y_center - mesh_width/2, derived['z_fuel_bottom']]
-    mesh.upper_right = [x_center + mesh_width/2, y_center + mesh_width/2, derived['z_fuel_top']]
+    assembly_mesh = openmc.RegularMesh()
+    assembly_mesh.dimension = [50, 50, 1]
+    assembly_mesh.lower_left = [x_center - mesh_width/2, y_center - mesh_width/2, derived['z_fuel_bottom']]
+    assembly_mesh.upper_right = [x_center + mesh_width/2, y_center + mesh_width/2, derived['z_fuel_top']]
 
-    mesh_filter = openmc.MeshFilter(mesh)
+    assembly_mesh_filter = openmc.MeshFilter(assembly_mesh)
 
     # Use pre-created energy filters
     thermal_filter = energy_filters['thermal']
@@ -440,25 +446,25 @@ def create_tritium_assembly_mesh_tally(energy_filters):
 
     # Total flux
     total_tally = openmc.Tally(name='tritium_assembly_mesh_total')
-    total_tally.filters = [mesh_filter]
+    total_tally.filters = [assembly_mesh_filter]
     total_tally.scores = ['flux']
     tallies.append(total_tally)
 
     # Thermal flux
     thermal_tally = openmc.Tally(name='tritium_assembly_mesh_thermal')
-    thermal_tally.filters = [mesh_filter, thermal_filter]
+    thermal_tally.filters = [assembly_mesh_filter, thermal_filter]
     thermal_tally.scores = ['flux']
     tallies.append(thermal_tally)
 
     # Epithermal flux
     epithermal_tally = openmc.Tally(name='tritium_assembly_mesh_epithermal')
-    epithermal_tally.filters = [mesh_filter, epithermal_filter]
+    epithermal_tally.filters = [assembly_mesh_filter, epithermal_filter]
     epithermal_tally.scores = ['flux']
     tallies.append(epithermal_tally)
 
     # Fast flux
     fast_tally = openmc.Tally(name='tritium_assembly_mesh_fast')
-    fast_tally.filters = [mesh_filter, fast_filter]
+    fast_tally.filters = [assembly_mesh_filter, fast_filter]
     fast_tally.scores = ['flux']
     tallies.append(fast_tally)
 
