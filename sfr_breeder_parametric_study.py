@@ -99,8 +99,8 @@ def run_single_case(mat_dict, breeder_material, location, sim_dir):
 
     # Calculate tritium production rate
     try:
-        # Get Li-6 (n,t) tally
-        tritium_tally = sp.get_tally(name='sfr_tritium_production_total')
+        # Get Li-6 (n,t) tally - use correct name from tallies_sfr.py
+        tritium_tally = sp.get_tally(name='sfr_tritium_production')
         tritium_rate_per_source = tritium_tally.mean.flatten()[0]
         tritium_std_per_source = tritium_tally.std_dev.flatten()[0]
 
