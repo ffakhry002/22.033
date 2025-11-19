@@ -509,14 +509,17 @@ def SFR_reflector_assembly(mat_dict):
     return reflector_universe
 
 
-def SFR_tritium_breeder_assembly(mat_dict):
+def SFR_tritium_breeder_assembly(mat_dict, breeder_material_override=None):
     """Create a tritium breeding assembly with hexagonal shape for SFR.
 
-    Uses:
-    - Hexagonal breeder region (not cylindrical)
-    - 7 cooling loops: 1 center + 6 aligned with hex corners at 2/3 distance
-    - Hexagonal cladding around breeder
-    - Filled with breeder material
+    Simplified design with solid breeder material (no cooling channels).
+
+    Parameters
+    ----------
+    mat_dict : dict
+        Dictionary of materials
+    breeder_material_override : str, optional
+        Override breeder material name (for parametric studies)
 
     Returns
     -------
@@ -527,8 +530,6 @@ def SFR_tritium_breeder_assembly(mat_dict):
     surfaces_dict : dict
         Dictionary of key surfaces for tally creation
     """
-    from math import pi, cos, sin, sqrt
-
     # Assembly hex boundary
     hex_edge = inputs['sfr_tritium_breeder_edge']
     hex_assembly_boundary = openmc.model.HexagonalPrism(edge_length=hex_edge, orientation='x')
@@ -543,65 +544,22 @@ def SFR_tritium_breeder_assembly(mat_dict):
     # Outer hexagonal cladding boundary (same as assembly boundary)
     hex_breeder_outer = openmc.model.HexagonalPrism(edge_length=hex_edge, orientation='x')
 
-    # Coolant tube dimensions: outer radius = 1.25 cm
-    coolant_tube_or = 1.25  # cm
-    coolant_tube_wall_thickness = 0.15  # cm (12% of tube radius)
-    coolant_tube_ir = coolant_tube_or - coolant_tube_wall_thickness
-
-    # 7 cooling loop positions: 1 center + 6 at hex corners (2/3 distance)
-    # Hexagon corners at 60° intervals
-    # Inscribed circle radius of breeder hexagon
-    hex_inscribed_radius = breeder_hex_edge * sqrt(3) / 2
-    two_thirds_dist = hex_inscribed_radius * (2.0 / 3.0)
-    coolant_positions = [(0.0, 0.0)]  # Center
-
-    # 6 positions aligned with hex corners
-    for i in range(6):
-        angle = i * pi / 3.0  # 0°, 60°, 120°, 180°, 240°, 300°
-        x = two_thirds_dist * cos(angle)
-        y = two_thirds_dist * sin(angle)
-        coolant_positions.append((x, y))
-
-    # Select breeder material
-    breeder_material = inputs['breeder_material']
+    # Select breeder material (allow override for parametric studies)
+    if breeder_material_override is not None:
+        breeder_material = breeder_material_override
+    else:
+        breeder_material = inputs['breeder_material']
     breeder_mat = mat_dict[breeder_material]
 
-    # Create breeder region (will exclude coolant tubes)
-    breeder_region = -hex_breeder_inner
-
-    # Create coolant tubes and exclude from breeder region
-    tube_cells = []
-    for i, (x, y) in enumerate(coolant_positions):
-        tube_outer_surf = openmc.ZCylinder(x0=x, y0=y, r=coolant_tube_or)
-        tube_inner_surf = openmc.ZCylinder(x0=x, y0=y, r=coolant_tube_ir)
-
-        # Exclude from breeder region
-        breeder_region &= +tube_outer_surf
-
-        # Coolant inside - use sodium for SFR
-        coolant_inner = openmc.Cell(
-            name='sfr_tritium_coolant_inner',
-            fill=mat_dict['sodium'],
-            region=-tube_inner_surf
-        )
-        # Ti-0.2Pd wall
-        tube_wall = openmc.Cell(
-            name='sfr_tritium_coolant_wall',
-            fill=mat_dict['ti_grade7'],
-            region=+tube_inner_surf & -tube_outer_surf
-        )
-
-        tube_cells.extend([coolant_inner, tube_wall])
-
-    # Create breeder cell (hexagonal, with cooling tubes excluded)
+    # Create breeder cell (solid hexagonal region - NO cooling tubes)
     breeder_cell = openmc.Cell(
         name='sfr_tritium_breeder_material',
         fill=breeder_mat,
-        region=breeder_region
+        region=-hex_breeder_inner
     )
 
-    # Create universe containing breeder and coolant tubes
-    breeder_universe = openmc.Universe(cells=[breeder_cell] + tube_cells)
+    # Create universe containing only breeder (simplified design)
+    breeder_universe = openmc.Universe(cells=[breeder_cell])
 
     # Main assembly cells
     # 1. Breeder bundle (hexagonal)
@@ -641,12 +599,25 @@ def SFR_tritium_breeder_assembly(mat_dict):
     return root_universe, cells_dict, surfaces_dict
 
 
-def build_SFR_core_lattice(mat_dict, hex_boundary, plane_bottom, plane_top):
+def build_SFR_core_lattice(mat_dict, hex_boundary, plane_bottom, plane_top,
+                           tritium_location='ring7', breeder_material_override=None):
     """Build a hexagonal SFR core lattice matching the reference benchmark pattern.
 
     Uses the exact ring pattern from the European SFR benchmark with mixed transition zones.
-    Tritium breeder placed in Ring 7, position 30 (outer fuel ring) for tritium production
-    while maintaining high criticality with fuel at center.
+    Tritium breeder can be placed at center or Ring 7 position for parametric studies.
+
+    Parameters
+    ----------
+    mat_dict : dict
+        Dictionary of materials
+    hex_boundary : openmc.Surface
+        Hexagonal boundary surface
+    plane_bottom, plane_top : openmc.Surface
+        Axial boundary planes
+    tritium_location : str
+        'center' or 'ring7' for tritium breeder placement
+    breeder_material_override : str, optional
+        Override breeder material name (for parametric studies)
 
     Returns
     -------
@@ -664,12 +635,18 @@ def build_SFR_core_lattice(mat_dict, hex_boundary, plane_bottom, plane_top):
     sodium_mod_cell = openmc.Cell(fill=mat_dict['sodium'])
     sodium_mod_u = openmc.Universe(cells=(sodium_mod_cell,))
 
-    # Create tritium breeder assembly for Ring 7
-    tritium_assembly, tritium_cells, tritium_surfaces = SFR_tritium_breeder_assembly(mat_dict)
+    # Create tritium breeder assembly
+    tritium_assembly, tritium_cells, tritium_surfaces = SFR_tritium_breeder_assembly(
+        mat_dict, breeder_material_override
+    )
+
+    # Track location and material for tallies
+    breeder_mat_name = breeder_material_override if breeder_material_override else inputs['breeder_material']
     tritium_info = {
         'cells_dict': tritium_cells,
         'surfaces_dict': tritium_surfaces,
-        'location': 'Ring 7, position 30'  # Track location for tallies
+        'location': tritium_location,
+        'breeder_material': breeder_mat_name
     }
 
     # Create hexagonal core lattice
@@ -714,11 +691,15 @@ def build_SFR_core_lattice(mat_dict, hex_boundary, plane_bottom, plane_top):
     # Ring 6 (66 assemblies): ALL OUTER FUEL
     lattice_rings.append([outer_fuel] * 66)
 
-    # Ring 7 (60 assemblies): MIXED - 59 outer fuel + 1 TRITIUM BREEDER
-    # Place tritium breeder at position 30 (middle of ring for accessibility)
-    ring7 = [outer_fuel] * 60
-    ring7[30] = tritium_assembly  # Replace one outer fuel with tritium breeder
-    lattice_rings.append(ring7)
+    # Ring 7 (60 assemblies): MIXED or ALL OUTER FUEL (depends on tritium location)
+    if tritium_location == 'ring7':
+        # Place tritium breeder at position 30 (middle of ring for accessibility)
+        ring7 = [outer_fuel] * 60
+        ring7[30] = tritium_assembly  # Replace one outer fuel with tritium breeder
+        lattice_rings.append(ring7)
+    else:
+        # All outer fuel if tritium is at center
+        lattice_rings.append([outer_fuel] * 60)
 
     # Ring 8 (54 assemblies): MIXED - [2O, 6I, 1O] × 6-fold symmetry
     ring8 = []
@@ -752,9 +733,11 @@ def build_SFR_core_lattice(mat_dict, hex_boundary, plane_bottom, plane_top):
     # Ring 16 (6 assemblies): ALL INNER FUEL
     lattice_rings.append([inner_fuel] * 6)
 
-    # Ring 17 (1 assembly): CENTER - INNER FUEL
-    # Tritium breeder moved to Ring 7 (outer position) for better criticality
-    lattice_rings.append([inner_fuel])
+    # Ring 17 (1 assembly): CENTER - INNER FUEL or TRITIUM BREEDER (depends on location)
+    if tritium_location == 'center':
+        lattice_rings.append([tritium_assembly])  # Tritium at center
+    else:
+        lattice_rings.append([inner_fuel])  # Fuel at center (tritium in Ring 7)
 
     core_lattice.universes = lattice_rings
 
@@ -844,8 +827,17 @@ def build_core_lattice(mat_dict, cyl_core, plane_bottom, plane_top):
     return lattice_cell, tritium_info
 
 
-def create_SFR_core(mat_dict):
-    """Create the full SFR core geometry with hexagonal layout and SS316 reflector.
+def create_SFR_core(mat_dict, tritium_location='ring7', breeder_material_override=None):
+    """Create the full SFR core geometry with hexagonal layout and MgO reflector.
+
+    Parameters
+    ----------
+    mat_dict : dict
+        Dictionary of materials
+    tritium_location : str
+        'center' or 'ring7' for tritium breeder placement
+    breeder_material_override : str, optional
+        Override breeder material name (for parametric studies)
 
     Returns
     -------
@@ -888,7 +880,9 @@ def create_SFR_core(mat_dict):
         mat_dict,
         hex_core_boundary,
         plane_fuel_bottom,
-        plane_fuel_top
+        plane_fuel_top,
+        tritium_location,
+        breeder_material_override
     )
 
     # Bottom axial reflector (MgO - excellent for fast spectrum)
