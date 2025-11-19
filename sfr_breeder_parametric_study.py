@@ -14,8 +14,11 @@ from pathlib import Path
 import shutil
 from inputs import inputs, get_derived_dimensions
 from materials import make_materials
-from geometry import create_SFR_core
+from geometry import create_core
 from tallies import create_all_tallies
+
+# Temporarily modify inputs for each run
+import geometry
 
 # List of all available breeder materials
 BREEDER_MATERIALS = [
@@ -31,15 +34,25 @@ BREEDER_MATERIALS = [
 # Locations to test
 LOCATIONS = ['center', 'ring7']
 
-def run_single_case(mat_dict, breeder_material, location, sim_dir):
+def run_single_case(_, breeder_material, location, sim_dir):
     """Run a single simulation case with specified breeder material and location."""
 
     print(f"\n{'='*80}")
     print(f"Running: {breeder_material} at {location}")
     print(f"{'='*80}")
 
-    # Create geometry with specified breeder and location
-    geometry, surfaces_dict = create_SFR_core(mat_dict, location, breeder_material)
+    # Temporarily modify inputs for this run
+    original_breeder = inputs['breeder_material']
+    inputs['breeder_material'] = breeder_material
+
+    # Create materials with new breeder material
+    mat_dict_local = make_materials()
+
+    # Create geometry with specified location and breeder (same as run.py approach)
+    geom, surfaces_dict = geometry.create_SFR_core(mat_dict_local, location, breeder_material)
+
+    # Restore original
+    inputs['breeder_material'] = original_breeder
 
     # Create settings
     settings = openmc.Settings()
@@ -73,17 +86,17 @@ def run_single_case(mat_dict, breeder_material, location, sim_dir):
     settings.temperature = {'method': 'interpolation'}
 
     # Create tallies
-    tallies = create_all_tallies(geometry, surfaces_dict)
+    tallies = create_all_tallies(geom, surfaces_dict)
 
-    # Create materials collection
-    materials = openmc.Materials([mat for mat in mat_dict.values()])
+    # Create materials collection (use locally created materials)
+    materials = openmc.Materials([mat for mat in mat_dict_local.values()])
 
     # Export to specific directory
     case_dir = sim_dir / f"{breeder_material}_{location}"
     case_dir.mkdir(exist_ok=True, parents=True)
 
     materials.export_to_xml(str(case_dir / 'materials.xml'))
-    geometry.export_to_xml(str(case_dir / 'geometry.xml'))
+    geom.export_to_xml(str(case_dir / 'geometry.xml'))
     settings.export_to_xml(str(case_dir / 'settings.xml'))
     tallies.export_to_xml(str(case_dir / 'tallies.xml'))
 
@@ -173,18 +186,15 @@ def main():
     base_dir = Path('sfr_parametric_study')
     base_dir.mkdir(exist_ok=True)
 
-    # Create materials once
-    print("\nCreating materials...")
-    mat_dict = make_materials()
-
     # Storage for all results
     all_results = []
 
-    # Run all cases
+    # Run all cases (materials created fresh for each case)
     for breeder_material in BREEDER_MATERIALS:
         for location in LOCATIONS:
             try:
-                results = run_single_case(mat_dict, breeder_material, location, base_dir)
+                # Pass None for mat_dict since we create it inside run_single_case
+                results = run_single_case(None, breeder_material, location, base_dir)
                 all_results.append(results)
             except Exception as e:
                 print(f"\n  ERROR in {breeder_material} at {location}: {e}")

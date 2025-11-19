@@ -31,11 +31,16 @@ def create_sfr_tritium_breeder_tallies(geometry, surfaces_dict, energy_filters):
     """
     tallies = openmc.Tallies()
 
+    print("\n  DEBUG: create_sfr_tritium_breeder_tallies() called")
+    print(f"  DEBUG: surfaces_dict keys: {list(surfaces_dict.keys())}")
+
     # Get tritium breeder info
     tritium_info = surfaces_dict.get('tritium_info')
     if tritium_info is None:
-        print("\n  Warning: No SFR tritium breeder found")
+        print("\n  ❌ ERROR: No 'tritium_info' in surfaces_dict!")
         return tallies
+
+    print(f"  DEBUG: tritium_info keys: {list(tritium_info.keys())}")
 
     try:
         cells_dict = tritium_info['cells_dict']
@@ -52,17 +57,31 @@ def create_sfr_tritium_breeder_tallies(geometry, surfaces_dict, energy_filters):
         print(f"\n  Warning: Could not find required SFR tritium info: {e}")
         return tallies
 
-    # Find breeder material cells (excluding cooling tubes)
+    # Find breeder material cells
     breeder_cells = []
-    for cell in geometry.get_all_cells().values():
+    all_cells = geometry.get_all_cells()
+
+    print(f"\n  DEBUG: Searching {len(all_cells)} cells for tritium breeder...")
+
+    for cell_id, cell in all_cells.items():
         if cell.name == 'sfr_tritium_breeder_material':
             breeder_cells.append(cell)
+            print(f"    ✓ Found breeder cell ID {cell_id}")
 
     if not breeder_cells:
-        print("\n  Warning: No SFR tritium breeder material cells found")
+        print("\n  ❌ ERROR: No SFR tritium breeder material cells found!")
+        print(f"  Searched for cell name: 'sfr_tritium_breeder_material'")
+        print(f"  Total cells searched: {len(all_cells)}")
+
+        # Debug: Show some cell names
+        print("\n  Sample of cell names found:")
+        sample_names = list(set([c.name for c in list(all_cells.values())[:50] if c.name]))
+        for name in sample_names[:10]:
+            print(f"    - '{name}'")
+
         return tallies
 
-    print(f"\nCreating SFR tritium breeder tallies ({len(breeder_cells)} breeder cells)...")
+    print(f"\n  ✓ Creating SFR tritium breeder tallies ({len(breeder_cells)} breeder cells)...")
 
     # Use pre-created energy filters
     thermal_filter = energy_filters['thermal']

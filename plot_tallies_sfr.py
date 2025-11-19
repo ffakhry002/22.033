@@ -511,10 +511,10 @@ def plot_sfr_tritium_assembly_heatmap(sp, output_dir='tally_figures'):
                 radius=hex_circumradius,
                 orientation=np.pi/6,  # Rotate 30° for flat-top (pointing right)
                 fill=False,
-                edgecolor='white',
-                linewidth=3,
+                edgecolor='none',
+                linewidth=0,
                 linestyle='-',
-                alpha=0.9,
+                alpha=0.0,
                 label='Tritium Breeder'
             )
             ax.add_patch(hexagon_center)
@@ -539,10 +539,10 @@ def plot_sfr_tritium_assembly_heatmap(sp, output_dir='tally_figures'):
                     radius=hex_circumradius,
                     orientation=np.pi/6,  # Same orientation as center
                     fill=False,
-                    edgecolor='white',
-                    linewidth=2,
-                    linestyle='--',
-                    alpha=0.6
+                    edgecolor='none',
+                    linewidth=0,
+                    linestyle='-',
+                    alpha=0.0
                 )
                 ax.add_patch(hexagon)
 
