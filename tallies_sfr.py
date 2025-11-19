@@ -91,50 +91,47 @@ def create_sfr_tritium_breeder_tallies(geometry, surfaces_dict, energy_filters):
     log_1001_filter = energy_filters['log_1001']
 
     # ============================================================
-    # 1. SURFACE TALLIES: Current from cladding into breeder
+    # 1. SURFACE TALLIES: Current crossing into breeder
     # ============================================================
-    print("  - Surface current tallies (cladding → breeder)...")
+    print("  - Surface current tallies (into breeder)...")
 
-    # Create surface filter for inner hexagon boundary
-    # Note: For hexagonal surfaces, we use the cell-based approach
-    # We'll tally current entering the bundle cell from the cladding cell
+    # Use surface filter on the hexagonal boundary
+    # Tally current crossing the hex_breeder_inner surface (INWARD)
+    surface_filter = openmc.SurfaceFilter(hex_breeder_inner)
 
-    cladding_from_filter = openmc.CellFromFilter(cladding_cell)
-    bundle_filter = openmc.CellFilter(bundle_cell)
-
-    # Total current entering breeder from cladding
+    # Total current crossing into breeder
     current_total = openmc.Tally(name='sfr_tritium_current_total')
-    current_total.filters = [bundle_filter, cladding_from_filter]
+    current_total.filters = [surface_filter]
     current_total.scores = ['current']
     tallies.append(current_total)
 
     # Thermal current
     current_thermal = openmc.Tally(name='sfr_tritium_current_thermal')
-    current_thermal.filters = [bundle_filter, cladding_from_filter, thermal_filter]
+    current_thermal.filters = [surface_filter, thermal_filter]
     current_thermal.scores = ['current']
     tallies.append(current_thermal)
 
     # Epithermal current
     current_epithermal = openmc.Tally(name='sfr_tritium_current_epithermal')
-    current_epithermal.filters = [bundle_filter, cladding_from_filter, epithermal_filter]
+    current_epithermal.filters = [surface_filter, epithermal_filter]
     current_epithermal.scores = ['current']
     tallies.append(current_epithermal)
 
     # Fast current
     current_fast = openmc.Tally(name='sfr_tritium_current_fast')
-    current_fast.filters = [bundle_filter, cladding_from_filter, fast_filter]
+    current_fast.filters = [surface_filter, fast_filter]
     current_fast.scores = ['current']
     tallies.append(current_fast)
 
     # Very-fast current (4th group)
     current_vfast = openmc.Tally(name='sfr_tritium_current_veryfast')
-    current_vfast.filters = [bundle_filter, cladding_from_filter, very_fast_filter]
+    current_vfast.filters = [surface_filter, very_fast_filter]
     current_vfast.scores = ['current']
     tallies.append(current_vfast)
 
     # LOG_1001 current spectrum
     current_log1001 = openmc.Tally(name='sfr_tritium_current_log1001')
-    current_log1001.filters = [bundle_filter, cladding_from_filter, log_1001_filter]
+    current_log1001.filters = [surface_filter, log_1001_filter]
     current_log1001.scores = ['current']
     tallies.append(current_log1001)
 
