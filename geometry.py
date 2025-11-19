@@ -937,7 +937,10 @@ def create_core(mat_dict):
 
     # Check if this is an SFR geometry
     if inputs['assembly_type'] == 'sodium':
-        return create_SFR_core(mat_dict)
+        # For run.py, default to center location for tritium breeder
+        # (For parametric study, location is passed explicitly)
+        tritium_location = inputs.get('sfr_tritium_location', 'center')
+        return create_SFR_core(mat_dict, tritium_location=tritium_location)
 
     # Select breeder material based on configuration
     valid_materials = [

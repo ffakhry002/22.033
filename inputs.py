@@ -220,7 +220,7 @@ inputs = {
     ###########################################
     'batches': int(250),             # Total batches
     'inactive': int(50),             # Inactive batches
-    'particles': int(10000),         # Particles per batch
+    'particles': int(100000),         # Particles per batch
     # Maximum number of particle events (OpenMC default: 1,000,000)
     'max_particle_events': 1000000000,
 

@@ -359,25 +359,53 @@ def extract_tritium_breeder_currents(sp, norm_factor, ukaea_energies, output_pat
 
     derived = get_derived_dimensions()
 
-    # Define the two tritium breeder surfaces
-    surfaces = {
-        'tritium_calandria_outer': {
-            'radius': inputs['candu_calandria_or'],  # 6.7526 cm
-            'description': 'Calandria Outer (from moderator, INWARD)'
-        },
-        'tritium_pt_inner': {
-            'radius': inputs['candu_pressure_tube_ir'],  # 5.1689 cm
-            'description': 'Pressure Tube Inner (from PT, INWARD)'
-        }
-    }
+    # Check if this is SFR or CANDU
+    is_sfr = inputs.get('assembly_type') == 'sodium'
 
-    # Calculate surface areas
-    height = derived['z_fuel_top'] - derived['z_fuel_bottom']
-    for surf_info in surfaces.values():
-        surf_info['area'] = 2 * np.pi * surf_info['radius'] * height  # cm²
+    if is_sfr:
+        # SFR tritium breeder - single hexagonal surface
+        # Current enters from cladding into breeder bundle
+        surfaces = {
+            'sfr_tritium_breeder': {
+                'edge_length': inputs['sfr_tritium_breeder_edge'] - 1.0,  # Inner hex edge (minus cladding)
+                'description': 'SFR Tritium Breeder Hexagonal Surface (INWARD)',
+                'height': inputs['sfr_axial_height'] * 2  # Full height
+            }
+        }
+
+        # Calculate hexagonal surface area
+        # Perimeter = 6 * edge_length, Area = Perimeter * height
+        for surf_info in surfaces.values():
+            edge = surf_info['edge_length']
+            height = surf_info['height']
+            perimeter = 6 * edge
+            surf_info['area'] = perimeter * height  # cm²
+            surf_info['radius'] = edge  # For compatibility, store edge as "radius"
+
+    else:
+        # CANDU tritium breeder - cylindrical surfaces
+        surfaces = {
+            'tritium_calandria_outer': {
+                'radius': inputs['candu_calandria_or'],  # 6.7526 cm
+                'description': 'Calandria Outer (from moderator, INWARD)'
+            },
+            'tritium_pt_inner': {
+                'radius': inputs['candu_pressure_tube_ir'],  # 5.1689 cm
+                'description': 'Pressure Tube Inner (from PT, INWARD)'
+            }
+        }
+
+    # Calculate surface areas for CANDU (already done for SFR above)
+    if not is_sfr:
+        height = derived['z_fuel_top'] - derived['z_fuel_bottom']
+        for surf_info in surfaces.values():
+            surf_info['area'] = 2 * np.pi * surf_info['radius'] * height  # cm²
 
     print("\n" + "="*70)
-    print("Processing Tritium Breeder Surface Current Tallies (INWARD)")
+    if is_sfr:
+        print("Processing SFR Tritium Breeder Surface Current Tallies (INWARD)")
+    else:
+        print("Processing CANDU Tritium Breeder Surface Current Tallies (INWARD)")
     print("="*70)
 
     results = {}
@@ -388,7 +416,13 @@ def extract_tritium_breeder_currents(sp, norm_factor, ukaea_energies, output_pat
         print("-" * 40)
 
         # Get log1001 surface current tally
-        tally_name = f'{surf_name}_current_log1001'
+        if is_sfr:
+            # SFR uses single unified tally name
+            tally_name = 'sfr_tritium_current_log1001'
+        else:
+            # CANDU uses per-surface tally names
+            tally_name = f'{surf_name}_current_log1001'
+
         try:
             tally = sp.get_tally(name=tally_name)
         except:
